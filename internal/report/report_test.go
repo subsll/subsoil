@@ -29,7 +29,7 @@ func fixture(t *testing.T) (*model.Result, string) {
 		DurationMS: 2000,
 		Resolvers:  []string{"1.1.1.1:53"},
 		Options: model.ScanOptions{
-			Brute: true, Words: 5000, Workers: 20, QPS: 50,
+			Brute: true, Words: 5000, Workers: 20, QPS: 50, ResolveIPs: true,
 			Sources: []string{"crt.sh"}, TimeoutSecond: 5, MaxHosts: 5000,
 		},
 		Records: []model.RecordSet{{

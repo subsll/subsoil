@@ -1,7 +1,9 @@
 package scan
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
@@ -76,6 +78,9 @@ func TestScanActive(t *testing.T) {
 		t.Fatalf("api cname = %q", got)
 	}
 
+	if !res.Options.ResolveIPs {
+		t.Fatal("ResolveIPs should default to true")
+	}
 	if res.Stats.BruteTried != 4 || res.Stats.BruteHits != 3 {
 		t.Fatalf("brute stats = %+v", res.Stats)
 	}
@@ -184,6 +189,91 @@ func TestScanAXFR(t *testing.T) {
 	}
 	if !rep.OK {
 		t.Fatalf("evidence did not verify: %v", rep.Errors)
+	}
+}
+
+func TestScanNoIPLookup(t *testing.T) {
+	z := testutil.NewZone("example.test")
+	z.Add(
+		"example.test. 300 IN SOA ns1.example.test. hostmaster.example.test. 1 3600 600 86400 300",
+		"example.test. 300 IN NS ns1.example.test.",
+		"example.test. 300 IN A 192.0.2.1",
+		"ns1.example.test. 300 IN A 127.0.0.1",
+		"www.example.test. 300 IN A 192.0.2.10",
+	)
+	addr := z.Start(t)
+	dir := t.TempDir()
+	words := writeWords(t, dir, []string{"www", "nope"})
+
+	res, err := Run(context.Background(), Options{
+		Domain:        "example.test",
+		OutDir:        dir,
+		Brute:         true,
+		PTR:           true,
+		NoIPLookup:    true,
+		WordlistPaths: []string{words},
+		Workers:       2,
+		QPS:           0,
+		Timeout:       2 * time.Second,
+		Resolvers:     []string{addr},
+		MaxHosts:      10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Options.ResolveIPs {
+		t.Fatal("ResolveIPs should be false")
+	}
+	if res.Options.PTR {
+		t.Fatal("PTR should be disabled when IP lookup is off")
+	}
+	if len(res.Hosts) != 1 {
+		t.Fatalf("hosts = %+v", res.Hosts)
+	}
+	h := res.Hosts[0]
+	if h.Name != "www.example.test" || !h.Resolved || !h.IPsHidden {
+		t.Fatalf("host = %+v", h)
+	}
+	if len(h.IPs) != 0 || len(h.AAAA) != 0 {
+		t.Fatalf("IPs leaked: %v %v", h.IPs, h.AAAA)
+	}
+	if len(res.PTR) != 0 {
+		t.Fatalf("PTR results = %+v", res.PTR)
+	}
+
+	f, err := os.Open(res.Evidence.File)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	found := false
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for sc.Scan() {
+		var rec struct {
+			Type   string         `json:"type"`
+			Target string         `json:"target"`
+			Data   map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Type != "host" || rec.Target != "www.example.test" {
+			continue
+		}
+		found = true
+		if rec.Data["ips_hidden"] != true {
+			t.Fatalf("host evidence does not mark hidden IPs: %v", rec.Data)
+		}
+		if ips, ok := rec.Data["ips"].([]any); !ok || len(ips) != 0 {
+			t.Fatalf("host evidence leaked IPs: %v", rec.Data["ips"])
+		}
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("host evidence record not found")
 	}
 }
 

@@ -88,6 +88,7 @@ func printWelcome(w io.Writer, color bool) {
 		{"--dns-servers <list>", "resolvers; repeatable, or system"},
 		{"-v, --verbose", "per-query and per-source logging"},
 		{"--fast", "250 qps, 50 workers (noisier)"},
+		{"--no-resolve-ips", "hide subdomain IP lookups"},
 		{"-o, --out <dir>", "output directory"},
 	}
 	for _, f := range flags {

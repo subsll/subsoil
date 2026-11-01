@@ -45,6 +45,10 @@ No DNS records were collected.
 
 ## Subdomains ({{len .Hosts}})
 
+{{if not .Options.ResolveIPs}}
+> IP lookup is disabled for this scan; addresses are hidden.
+{{end}}
+
 {{if .Hosts}}
 | Host | Addresses | Status | Sources | Evidence SHA-256 |
 | --- | --- | --- | --- | --- |
@@ -202,6 +206,7 @@ const htmlTemplate = `<!doctype html>
   {{else}}<p class="muted">No DNS records were collected.</p>{{end}}
 
   <h2>Subdomains</h2>
+  {{if not .Options.ResolveIPs}}<p class="muted">IP lookup is disabled for this scan; addresses are hidden.</p>{{end}}
   {{if .Hosts}}
   <div class="wrap"><table>
     <thead><tr><th>Host</th><th>Addresses</th><th>Status</th><th>Sources</th><th>Evidence SHA-256</th></tr></thead>

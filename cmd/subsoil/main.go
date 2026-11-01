@@ -69,6 +69,8 @@ func cmdScan(args []string) int {
 		ptr           bool
 		recursive     bool
 		ipv6          bool
+		resolveIPs    bool
+		noResolveIPs  bool
 		capture       bool
 		workers       int
 		qps           int
@@ -103,6 +105,8 @@ func cmdScan(args []string) int {
 	fs.BoolVar(&ptr, "ptr", false, "reverse-resolve addresses")
 	fs.BoolVar(&recursive, "recursive", false, "recursive brute force")
 	fs.BoolVar(&ipv6, "ipv6", false, "resolve AAAA records")
+	fs.BoolVar(&resolveIPs, "resolve-ips", true, "resolve and display IP addresses for discovered subdomains")
+	fs.BoolVar(&noResolveIPs, "no-resolve-ips", false, "do not resolve or display IP addresses for discovered subdomains")
 	fs.BoolVar(&capture, "capture", false, "save HTTP response bodies")
 	fs.IntVar(&workers, "workers", 20, "DNS workers")
 	fs.IntVar(&qps, "qps", 50, "DNS queries per second (0 = unlimited)")
@@ -167,6 +171,10 @@ func cmdScan(args []string) int {
 				}
 			}
 		}
+	}
+
+	if noResolveIPs {
+		resolveIPs = false
 	}
 
 	if fast {
@@ -254,8 +262,8 @@ func cmdScan(args []string) int {
 		fmt.Fprintf(os.Stderr, "  %s %s  %s %s  %s %d qps  %s %d workers\n",
 			p.dim("target"), domain, p.dim("·"), mode, p.dim("·"), qps, p.dim("·"), workers)
 	}
-	log.Verbose("config: target=%s resolvers=%s sources=%s workers=%d qps=%d timeout=%s",
-		domain, strings.Join(resolverList, ","), strings.Join(sourceList, ","), workers, qps, timeout)
+	log.Verbose("config: target=%s resolvers=%s sources=%s workers=%d qps=%d timeout=%s resolve_ips=%t",
+		domain, strings.Join(resolverList, ","), strings.Join(sourceList, ","), workers, qps, timeout, resolveIPs)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -273,6 +281,7 @@ func cmdScan(args []string) int {
 		PTR:           ptr,
 		Recursive:     recursive,
 		IPv6:          ipv6,
+		NoIPLookup:    !resolveIPs,
 		Capture:       capture,
 		Workers:       workers,
 		QPS:           qps,

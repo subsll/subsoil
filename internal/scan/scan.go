@@ -56,6 +56,7 @@ type Options struct {
 	PTR           bool
 	Recursive     bool
 	IPv6          bool
+	NoIPLookup    bool
 	Capture       bool
 	Workers       int
 	QPS           int
@@ -164,9 +165,10 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 			AXFR:          opt.AXFR && !opt.PassiveOnly,
 			HTTP:          opt.HTTP && !opt.PassiveOnly,
 			SRV:           opt.SRV && !opt.PassiveOnly,
-			PTR:           opt.PTR && !opt.PassiveOnly,
+			PTR:           opt.PTR && !opt.PassiveOnly && !opt.NoIPLookup,
 			Recursive:     opt.Recursive && !opt.PassiveOnly,
 			IPv6:          opt.IPv6,
+			ResolveIPs:    !opt.NoIPLookup,
 			Workers:       opt.Workers,
 			QPS:           opt.QPS,
 			TimeoutSecond: int(opt.Timeout / time.Second),
@@ -192,11 +194,15 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	}()
 
 	opt.Log.Verbose("evidence log: %s", rec.Path())
+	if opt.NoIPLookup {
+		opt.Log.Info("IP lookup disabled for discovered names; addresses will be hidden")
+	}
 	if _, aerr := rec.Add("scan_start", domain, "subsoil", map[string]any{
 		"version":      model.Version,
 		"resolvers":    opt.Resolvers,
 		"passive_only": opt.PassiveOnly,
 		"brute":        opt.Brute && !opt.PassiveOnly,
+		"resolve_ips":  !opt.NoIPLookup,
 		"sources":      opt.Sources,
 		"started":      started.Format(time.RFC3339Nano),
 	}); aerr != nil {
@@ -408,7 +414,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		go func() {
 			bruteCh <- brute.Run(ctx, rr, domain, words, brute.Options{
 				Workers:  opt.Workers,
-				IPv6:     opt.IPv6,
+				IPv6:     opt.IPv6 && !opt.NoIPLookup,
 				Wildcard: wildcard,
 				Progress: func(done, total, hits int) {
 					now := time.Now()
@@ -444,7 +450,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		}
 	}
 
-	if !opt.PassiveOnly && len(passNames) > 0 {
+	if !opt.PassiveOnly && !opt.NoIPLookup && len(passNames) > 0 {
 		names := append([]string(nil), passNames...)
 		resolveCh = make(chan []resolvedName, 1)
 		go func() {
@@ -490,9 +496,17 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 			addErr("brute force: %d query error(s)", br.Errors)
 		}
 		for _, h := range br.Hosts {
-			opt.Log.Verbose("brute hit: %s (%s)", h.Name, strings.Join(append(append([]string{}, h.IPs...), h.AAAA...), ", "))
+			if opt.NoIPLookup {
+				opt.Log.Verbose("brute hit: %s (IPs hidden)", h.Name)
+			} else {
+				opt.Log.Verbose("brute hit: %s (%s)", h.Name, strings.Join(append(append([]string{}, h.IPs...), h.AAAA...), ", "))
+			}
 			addHost(h.Name, h.IPs, h.AAAA, h.CNAME, "brute", true)
-			record("subdomain", h.Name, "brute", map[string]any{"ips": h.IPs, "aaaa": h.AAAA, "cname": h.CNAME})
+			data := map[string]any{"ips": h.IPs, "aaaa": h.AAAA, "cname": h.CNAME}
+			if opt.NoIPLookup {
+				data = map[string]any{"ips_hidden": true, "cname": h.CNAME}
+			}
+			record("subdomain", h.Name, "brute", data)
 		}
 		opt.Log.Success("brute force: %d hit(s), %d wildcard-filtered, %d query error(s)", br.Hits, br.WildcardDrops, br.Errors)
 	}
@@ -578,7 +592,10 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	}
 
 	// Reverse DNS for discovered addresses.
-	if opt.PTR && !opt.PassiveOnly && ctx.Err() == nil {
+	if opt.PTR && opt.NoIPLookup && !opt.PassiveOnly {
+		opt.Log.Warn("--ptr skipped because --no-resolve-ips is set")
+	}
+	if opt.PTR && !opt.PassiveOnly && !opt.NoIPLookup && ctx.Err() == nil {
 		ips := make([]string, 0, 64)
 		for _, a := range hosts {
 			ips = append(ips, a.ipList()...)
@@ -687,10 +704,17 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 			RCode:     a.rcode,
 			FirstSeen: a.first,
 		}
-		ev, aerr := rec.Add("host", name, "subsoil", map[string]any{
+		hostData := map[string]any{
 			"ips": h.IPs, "aaaa": h.AAAA, "cname": h.CNAME,
 			"sources": h.Sources, "resolved": h.Resolved, "rcode": h.RCode,
-		})
+		}
+		if opt.NoIPLookup {
+			h.IPs, h.AAAA = nil, nil
+			h.IPsHidden = true
+			hostData["ips"], hostData["aaaa"] = []string{}, []string{}
+			hostData["ips_hidden"] = true
+		}
+		ev, aerr := rec.Add("host", name, "subsoil", hostData)
 		if aerr != nil {
 			addErr("evidence write failed: %v", aerr)
 		}

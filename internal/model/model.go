@@ -23,6 +23,7 @@ type ScanOptions struct {
 	PTR           bool     `json:"ptr"`
 	Recursive     bool     `json:"recursive"`
 	IPv6          bool     `json:"ipv6"`
+	ResolveIPs    bool     `json:"resolve_ips"`
 	Workers       int      `json:"workers"`
 	QPS           int      `json:"qps"`
 	TimeoutSecond int      `json:"timeout_seconds"`
@@ -46,6 +47,7 @@ type Host struct {
 	Name      string    `json:"name"`
 	IPs       []string  `json:"ips,omitempty"`
 	AAAA      []string  `json:"aaaa,omitempty"`
+	IPsHidden bool      `json:"ips_hidden,omitempty"`
 	CNAME     string    `json:"cname,omitempty"`
 	Sources   []string  `json:"sources,omitempty"`
 	Wildcard  bool      `json:"wildcard,omitempty"`
