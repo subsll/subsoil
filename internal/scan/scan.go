@@ -64,6 +64,7 @@ type Options struct {
 	Resolvers     []string
 	Sources       []string
 	SourceTimeout time.Duration
+	OTXKey        string
 	MaxHosts      int
 	MaxHTTP       int
 	Exclude       *regexp.Regexp
@@ -294,6 +295,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		go func() {
 			names, errs := passive.Resolve(ctx, domain, opt.Sources, passive.Options{
 				Timeout:    opt.SourceTimeout,
+				OTXKey:     opt.OTXKey,
 				VerboseLog: func(format string, args ...any) { opt.Log.Verbose(format, args...) },
 			})
 			passCh <- passResult{names: names, errs: errs}
@@ -371,6 +373,9 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	if passCh != nil {
 		pr := <-passCh
 		for _, src := range opt.Sources {
+			if _, failed := pr.errs[src]; failed {
+				continue
+			}
 			names := pr.names[src]
 			opt.Log.Info("%s: %d name(s)", src, len(names))
 			for _, name := range names {
@@ -384,6 +389,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 			}
 		}
 		for src, serr := range pr.errs {
+			opt.Log.Warn("passive %s: %v", src, serr)
 			addErr("passive %s: %v", src, serr)
 			record("source_error", domain, "passive:"+src, map[string]any{"error": serr.Error()})
 		}

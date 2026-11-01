@@ -4,6 +4,15 @@ All notable changes to Subsoil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.3.1]
+
+### Fixed
+
+- OTX passive DNS now requires authentication. Added `SUBSOIL_OTX_KEY` (or
+  `OTX_API_KEY`) support via the `X-OTX-API-KEY` header and removed OTX from the
+  default sources. Missing keys now produce a clear error instead of an
+  anonymous HTTP 403.
+
 ## [1.3.0]
 
 ### Added

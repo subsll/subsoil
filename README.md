@@ -13,13 +13,13 @@ hash-chained evidence log so results can be verified later.
 
 ```text
 $ subsoil scan example.com --no-brute --verbose
-  Subsoil 1.3.0  ·  low-observable DNS reconnaissance
+  Subsoil 1.3.1  ·  low-observable DNS reconnaissance
   target example.com  ·  standard  ·  50 qps  ·  20 workers
 
-[v] config: target=example.com resolvers=1.1.1.1:53 sources=crt.sh,certspotter,otx workers=20 qps=50 timeout=5s
+[v] config: target=example.com resolvers=1.1.1.1:53 sources=crt.sh,certspotter workers=20 qps=50 timeout=5s
 [v] dns A example.com @1.1.1.1:53 -> NOERROR, 2 answer(s), 13ms
 [v] dns MX example.com @1.1.1.1:53 -> NOERROR, 1 answer(s), 15ms
-[*] passive sources: crt.sh, certspotter, otx
+[*] passive sources: crt.sh, certspotter
 ```
 
 > **Authorised use only.** Use Subsoil against systems you own or have explicit
@@ -247,7 +247,7 @@ subsoil-example.com-20260101-120000/
     --fast               raise the rate to 250 qps and 50 workers
     --timeout <dur>      per-query timeout (default 5s)
     --dns-servers <list> DNS servers (repeatable, comma separated, or system)
-    --sources <list>     crt.sh, certspotter, otx, hackertarget, all, none
+    --sources <list>     crt.sh, certspotter (default); otx, hackertarget, all, none
     --source-timeout <d> per-source timeout (default 90s)
     --format <list>      text,json,md,html (default all)
 -o, --out <dir>          output directory
@@ -283,6 +283,20 @@ server is tried. `--resolver`, `--resolvers` and `--dns-server` remain aliases.
 Only classic DNS over UDP/TCP is supported; DoH/DoT URLs are not accepted.
 
 ---
+
+## OTX API key
+
+OTX passive DNS now requires authentication. It is opt-in rather than part of
+the default sources:
+
+```sh
+export SUBSOIL_OTX_KEY="your-alienvault-otx-key"
+subsoil scan example.com --sources otx
+```
+
+`SUBSOIL_OTX_KEY` is preferred; `OTX_API_KEY` is also accepted. `--sources all`
+includes OTX and will use the key if present. Without a key, OTX is skipped with
+an actionable error and no HTTP request is made.
 
 ## Custom wordlists
 
@@ -398,7 +412,8 @@ initial DNS recon does not need.
 - **AXFR uses port 53** and only one address per nameserver.
 - **No screenshots, JS rendering or crawling.** One request per host.
 - **Passive source uptime is outside our control.** crt.sh returns 502s under
-  load and OTX rate-limits anonymous clients; failures are recorded as evidence.
+  load, and OTX requires an API key for passive DNS. Failures are recorded as
+  evidence.
 
 ---
 

@@ -203,6 +203,10 @@ func cmdScan(args []string) int {
 		}
 	}
 
+	otxKey := strings.TrimSpace(os.Getenv("SUBSOIL_OTX_KEY"))
+	if otxKey == "" {
+		otxKey = strings.TrimSpace(os.Getenv("OTX_API_KEY"))
+	}
 	sourceList := parseList(sources)
 	for _, s := range sourceList {
 		if s == "all" {
@@ -214,7 +218,7 @@ func cmdScan(args []string) int {
 		if s == "none" || s == "" {
 			continue
 		}
-		if _, ok := passive.NewSource(s, passive.Options{}); !ok {
+		if _, ok := passive.NewSource(s, passive.Options{OTXKey: otxKey}); !ok {
 			fmt.Fprintf(os.Stderr, "subsoil: unknown source %q (known: %s)\n", s, strings.Join(passive.KnownSources, ", "))
 			return 2
 		}
@@ -289,6 +293,7 @@ func cmdScan(args []string) int {
 		Resolvers:     resolverList,
 		Sources:       sourceList,
 		SourceTimeout: sourceTimeout,
+		OTXKey:        otxKey,
 		MaxHosts:      maxHosts,
 		MaxHTTP:       maxHTTP,
 		Exclude:       excl,
