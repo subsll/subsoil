@@ -64,6 +64,7 @@ type Options struct {
 	Resolvers     []string
 	Sources       []string
 	SourceTimeout time.Duration
+	OTXKey        string
 	MaxHosts      int
 	MaxHTTP       int
 	Exclude       *regexp.Regexp
@@ -126,7 +127,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		opt.Timeout = 5 * time.Second
 	}
 	if opt.SourceTimeout <= 0 {
-		opt.SourceTimeout = 60 * time.Second
+		opt.SourceTimeout = 30 * time.Second
 	}
 	if opt.MaxHosts <= 0 {
 		opt.MaxHosts = 5000
@@ -294,6 +295,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		go func() {
 			names, errs := passive.Resolve(ctx, domain, opt.Sources, passive.Options{
 				Timeout:    opt.SourceTimeout,
+				OTXKey:     opt.OTXKey,
 				VerboseLog: func(format string, args ...any) { opt.Log.Verbose(format, args...) },
 			})
 			passCh <- passResult{names: names, errs: errs}
@@ -371,6 +373,9 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	if passCh != nil {
 		pr := <-passCh
 		for _, src := range opt.Sources {
+			if _, failed := pr.errs[src]; failed {
+				continue
+			}
 			names := pr.names[src]
 			opt.Log.Info("%s: %d name(s)", src, len(names))
 			for _, name := range names {
@@ -384,8 +389,10 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 			}
 		}
 		for src, serr := range pr.errs {
-			addErr("passive %s: %v", src, serr)
-			record("source_error", domain, "passive:"+src, map[string]any{"error": serr.Error()})
+			msg := strings.TrimPrefix(serr.Error(), src+": ")
+			opt.Log.Warn("passive %s: %s", src, msg)
+			addErr("passive %s: %s", src, msg)
+			record("source_error", domain, "passive:"+src, map[string]any{"error": msg})
 		}
 		passNames = dedupeSorted(passNames)
 		opt.Log.Verbose("passive names: %d unique", len(passNames))

@@ -20,7 +20,8 @@ import (
 )
 
 // DefaultSources are enabled unless the operator overrides --sources.
-var DefaultSources = []string{"crt.sh", "certspotter", "otx"}
+// OTX is opt-in because its passive-DNS endpoint now requires an API key.
+var DefaultSources = []string{"crt.sh", "certspotter"}
 
 // KnownSources lists every implemented source.
 var KnownSources = []string{"crt.sh", "certspotter", "otx", "hackertarget"}
@@ -37,17 +38,20 @@ type Options struct {
 	Client     *http.Client
 	Timeout    time.Duration
 	Endpoints  map[string]string
+	OTXKey     string
 	VerboseLog func(format string, args ...any)
 }
 
 type httpSource struct {
-	name    string
-	url     func(base, domain string) string
-	parse   func([]byte) ([]string, error)
-	base    string
-	client  *http.Client
-	timeout time.Duration
-	vlog    func(format string, args ...any)
+	name     string
+	url      func(base, domain string) string
+	parse    func([]byte) ([]string, error)
+	base     string
+	client   *http.Client
+	timeout  time.Duration
+	attempts int
+	apiKey   string
+	vlog     func(format string, args ...any)
 }
 
 func (s *httpSource) Name() string { return s.name }
@@ -59,14 +63,27 @@ func (s *httpSource) logf(format string, args ...any) {
 }
 
 func (s *httpSource) Lookup(ctx context.Context, domain string) ([]string, error) {
+	if s.name == "otx" && s.apiKey == "" {
+		return nil, errors.New("OTX requires an API key; set SUBSOIL_OTX_KEY")
+	}
+	if s.name == "otx" {
+		const otxTimeout = 15 * time.Second
+		if s.timeout == 0 || s.timeout > otxTimeout {
+			s.timeout = otxTimeout
+		}
+	}
 	if s.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, s.timeout)
 		defer cancel()
 	}
 
+	attempts := s.attempts
+	if attempts <= 0 {
+		attempts = 3
+	}
 	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt < attempts; attempt++ {
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():
@@ -82,9 +99,12 @@ func (s *httpSource) Lookup(ctx context.Context, domain string) ([]string, error
 		if !retry || ctx.Err() != nil {
 			break
 		}
-		if attempt < 2 {
-			s.logf("%s: %v (retrying)", s.name, err)
+		if attempt < attempts-1 {
+			s.logf("retrying: %v", err)
 		}
+	}
+	if lastErr != nil && errors.Is(lastErr, context.DeadlineExceeded) {
+		return nil, fmt.Errorf("%s: timed out after %s; source skipped", s.name, s.timeout)
 	}
 	return nil, lastErr
 }
@@ -97,6 +117,9 @@ func (s *httpSource) fetch(ctx context.Context, domain string) ([]string, bool, 
 	req.Header.Set("User-Agent", webx.RandomUA())
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.8")
+	if s.name == "otx" && s.apiKey != "" {
+		req.Header.Set("X-OTX-API-KEY", s.apiKey)
+	}
 	s.logf("passive %s: GET %s", s.name, req.URL)
 
 	start := time.Now()
@@ -115,7 +138,18 @@ func (s *httpSource) fetch(ctx context.Context, domain string) ([]string, bool, 
 	}
 	if resp.StatusCode != http.StatusOK {
 		retry := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
-		return nil, retry, fmt.Errorf("%s: HTTP %d", s.name, resp.StatusCode)
+		msg := fmt.Sprintf("%s: HTTP %d %s", s.name, resp.StatusCode, http.StatusText(resp.StatusCode))
+		var apiErr struct {
+			Detail string `json:"detail"`
+		}
+		if json.Unmarshal(body, &apiErr) == nil && apiErr.Detail != "" {
+			detail := apiErr.Detail
+			if len(detail) > 300 {
+				detail = detail[:300]
+			}
+			msg += ": " + detail
+		}
+		return nil, retry, errors.New(msg)
 	}
 
 	raw, err := s.parse(body)
@@ -152,7 +186,7 @@ func NewSource(name string, opts Options) (Source, bool) {
 	if base == "" {
 		return nil, false
 	}
-	s := &httpSource{name: name, base: base, client: opts.Client, timeout: opts.Timeout, vlog: opts.VerboseLog}
+	s := &httpSource{name: name, base: base, client: opts.Client, timeout: opts.Timeout, attempts: 3, apiKey: opts.OTXKey, vlog: opts.VerboseLog}
 	switch name {
 	case "crt.sh":
 		s.url = func(base, domain string) string {
@@ -172,8 +206,12 @@ func NewSource(name string, opts Options) (Source, bool) {
 		}
 		s.parse = parseCertSpotter
 	case "otx":
+		// OTX frequently returns 502/504; fail over to the next source instead
+		// of retrying the same gateway for a minute.
+		s.attempts = 1
 		s.url = func(base, domain string) string {
-			return strings.TrimSuffix(base, "/") + "/api/v1/indicators/domain/" + url.PathEscape(domain) + "/passive_dns"
+			// base is https://otx.alienvault.com/api
+			return strings.TrimSuffix(base, "/") + "/v1/indicators/domain/" + url.PathEscape(domain) + "/passive_dns"
 		}
 		s.parse = parseOTX
 	case "hackertarget":
@@ -192,7 +230,7 @@ func NewSource(name string, opts Options) (Source, bool) {
 var defaultBase = map[string]string{
 	"crt.sh":       "https://crt.sh",
 	"certspotter":  "https://api.certspotter.com",
-	"otx":          "https://otx.alienvault.com",
+	"otx":          "https://otx.alienvault.com/api",
 	"hackertarget": "https://api.hackertarget.com",
 }
 
