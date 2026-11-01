@@ -201,7 +201,8 @@ func NewSource(name string, opts Options) (Source, bool) {
 		// of retrying the same gateway for a minute.
 		s.attempts = 1
 		s.url = func(base, domain string) string {
-			return strings.TrimSuffix(base, "/") + "/api/v1/indicators/domain/" + url.PathEscape(domain) + "/passive_dns"
+			// base is https://otx.alienvault.com/api
+			return strings.TrimSuffix(base, "/") + "/v1/indicators/domain/" + url.PathEscape(domain) + "/passive_dns"
 		}
 		s.parse = parseOTX
 	case "hackertarget":
@@ -220,7 +221,7 @@ func NewSource(name string, opts Options) (Source, bool) {
 var defaultBase = map[string]string{
 	"crt.sh":       "https://crt.sh",
 	"certspotter":  "https://api.certspotter.com",
-	"otx":          "https://otx.alienvault.com",
+	"otx":          "https://otx.alienvault.com/api",
 	"hackertarget": "https://api.hackertarget.com",
 }
 

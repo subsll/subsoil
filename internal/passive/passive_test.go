@@ -201,7 +201,10 @@ func TestOTXEndpoint(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected source type %T", s)
 	}
-	got := hs.url("https://otx.alienvault.com", "decubate.com")
+	if defaultBase["otx"] != "https://otx.alienvault.com/api" {
+		t.Fatalf("OTX base = %q", defaultBase["otx"])
+	}
+	got := hs.url(defaultBase["otx"], "decubate.com")
 	want := "https://otx.alienvault.com/api/v1/indicators/domain/decubate.com/passive_dns"
 	if got != want {
 		t.Fatalf("endpoint = %q, want %q", got, want)
