@@ -210,3 +210,25 @@ func TestOTXEndpoint(t *testing.T) {
 		t.Fatalf("endpoint = %q, want %q", got, want)
 	}
 }
+
+func TestOTXTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	s, ok := NewSource("otx", Options{
+		Client:    srv.Client(),
+		Timeout:   50 * time.Millisecond,
+		Endpoints: map[string]string{"otx": srv.URL},
+		OTXKey:    "sekret",
+	})
+	if !ok {
+		t.Fatal("otx source not available")
+	}
+	_, err := s.Lookup(t.Context(), "example.com")
+	if err == nil || !strings.Contains(err.Error(), "timed out after") {
+		t.Fatalf("error = %v, want a timeout message", err)
+	}
+}

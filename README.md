@@ -296,8 +296,9 @@ subsoil scan example.com --sources otx
 
 `SUBSOIL_OTX_KEY` is preferred; `OTX_API_KEY` is also accepted. `--sources all`
 includes OTX and will use the key if present. Without a key, OTX is skipped with
-an actionable error and no HTTP request is made. OTX is attempted only once, so
-gateway errors do not hold up a scan; raise `--source-timeout` if needed.
+an actionable error and no HTTP request is made. OTX is attempted only once and capped at 15s, so
+gateway errors and timeouts do not hold up a scan; raise `--source-timeout` for
+the other sources if needed.
 
 The JSON endpoint is
 `https://otx.alienvault.com/api/v1/indicators/domain/<domain>/passive_dns`.

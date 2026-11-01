@@ -66,6 +66,12 @@ func (s *httpSource) Lookup(ctx context.Context, domain string) ([]string, error
 	if s.name == "otx" && s.apiKey == "" {
 		return nil, errors.New("OTX requires an API key; set SUBSOIL_OTX_KEY")
 	}
+	if s.name == "otx" {
+		const otxTimeout = 15 * time.Second
+		if s.timeout == 0 || s.timeout > otxTimeout {
+			s.timeout = otxTimeout
+		}
+	}
 	if s.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, s.timeout)
@@ -96,6 +102,9 @@ func (s *httpSource) Lookup(ctx context.Context, domain string) ([]string, error
 		if attempt < attempts-1 {
 			s.logf("retrying: %v", err)
 		}
+	}
+	if lastErr != nil && errors.Is(lastErr, context.DeadlineExceeded) {
+		return nil, fmt.Errorf("%s: timed out after %s; source skipped", s.name, s.timeout)
 	}
 	return nil, lastErr
 }
