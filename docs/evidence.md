@@ -39,9 +39,9 @@ fixed:
 | --- | --- |
 | `scan_start` | version, resolvers, sources, passive_only, brute, started |
 | `dns_record` | qtype, rcode, rrs (canonical strings), rrs_sha256 |
-| `subdomain` | source, and ips/aaaa/cname for brute-force hits |
+| `subdomain` | source, and ips/aaaa/cname for brute-force hits, or `ips_hidden` |
 | `host_resolved` | ips, aaaa, cname, rcode, error |
-| `host` | ips, aaaa, cname, sources, resolved, rcode |
+| `host` | ips, aaaa, cname, sources, resolved, rcode, ips_hidden |
 | `wildcard` | enabled, probes, ips, cnames |
 | `axfr` | ok, address, records, records_sha256, error |
 | `srv` | target, port, priority, weight |

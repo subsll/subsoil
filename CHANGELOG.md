@@ -4,6 +4,14 @@ All notable changes to Subsoil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.3.0]
+
+### Added
+
+- `--resolve-ips` / `--no-resolve-ips` toggle for subdomain IP resolution.
+  Disabling it skips passive-name lookups and hides brute-force addresses in
+  reports and evidence; PTR is skipped.
+
 ## [1.2.0]
 
 ### Added

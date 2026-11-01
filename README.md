@@ -13,7 +13,7 @@ hash-chained evidence log so results can be verified later.
 
 ```text
 $ subsoil scan example.com --no-brute --verbose
-  Subsoil 1.2.0  ·  low-observable DNS reconnaissance
+  Subsoil 1.3.0  ·  low-observable DNS reconnaissance
   target example.com  ·  standard  ·  50 qps  ·  20 workers
 
 [v] config: target=example.com resolvers=1.1.1.1:53 sources=crt.sh,certspotter,otx workers=20 qps=50 timeout=5s
@@ -215,7 +215,7 @@ subsoil-example.com-20260101-120000/
 ├── report.html              standalone HTML report
 ├── report.json              complete machine-readable result
 ├── subdomains.txt           one name per line
-├── hosts.csv                name, status, addresses, sources, SHA-256
+├── hosts.csv                name, status, addresses, hidden flag, sources, SHA-256
 ├── evidence.jsonl           hash-chained proof log
 ├── evidence.jsonl.sha256    detached file hash
 ├── bodies/                  HTTP bodies (only with --capture)
@@ -240,6 +240,8 @@ subsoil-example.com-20260101-120000/
     --ptr                reverse-resolve discovered addresses
     --recursive          brute one level under discovered hosts
     --ipv6               also resolve AAAA
+    --resolve-ips        resolve/display IPs for discovered names (default true)
+    --no-resolve-ips     skip passive-name resolution and hide brute-force IPs
     --workers <n>        DNS workers (default 20)
     --qps <n>            queries/second, 0 = unlimited (default 50)
     --fast               raise the rate to 250 qps and 50 workers
@@ -309,6 +311,29 @@ A custom list takes precedence over `-e`. A missing or empty source fails fast
 with exit code `1`.
 
 ---
+
+## IP lookup toggle
+
+By default (`--resolve-ips`) Subsoil resolves every discovered subdomain to
+A/AAAA addresses and includes them in the reports. `--no-resolve-ips` turns that
+off:
+
+```sh
+subsoil scan example.com --no-resolve-ips
+```
+
+What changes:
+
+- passive names are not resolved, so no extra DNS lookups are made for them
+- brute force still resolves names internally to detect them, but IPs are
+  omitted from host records, evidence, CSV and reports
+- `--ptr` is skipped with a warning
+- apex A/AAAA records from the initial DNS baseline are still collected
+- raw AXFR output, if enabled, is unaffected
+- `--http` probes still connect by hostname; their IPs are not reported
+
+The JSON result records `"resolve_ips": false` and hosts carry
+`"ips_hidden": true`; the CSV has an `ips_hidden` column.
 
 ## Verbose output
 

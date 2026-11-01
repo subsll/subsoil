@@ -147,13 +147,13 @@ func writeHostsCSV(path string, hosts []model.Host) error {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	if err := w.Write([]string{"name", "resolved", "rcode", "ipv4", "ipv6", "cname", "sources", "sha256"}); err != nil {
+	if err := w.Write([]string{"name", "resolved", "rcode", "ipv4", "ipv6", "ips_hidden", "cname", "sources", "sha256"}); err != nil {
 		return err
 	}
 	for _, h := range hosts {
 		row := []string{
 			h.Name, fmt.Sprintf("%t", h.Resolved), h.RCode,
-			strings.Join(h.IPs, " "), strings.Join(h.AAAA, " "), h.CNAME,
+			strings.Join(h.IPs, " "), strings.Join(h.AAAA, " "), fmt.Sprintf("%t", h.IPsHidden), h.CNAME,
 			strings.Join(h.Sources, " "), h.Hash,
 		}
 		if err := w.Write(row); err != nil {
@@ -222,6 +222,9 @@ func RenderText(w io.Writer, res *model.Result, color bool) {
 	}
 	line("")
 	section(w, s, fmt.Sprintf("Subdomains  %d found · %d resolved", len(res.Hosts), resolved))
+	if !res.Options.ResolveIPs {
+		line("  %s", s.dim("IP lookup disabled: addresses are hidden"))
+	}
 	if len(res.Hosts) == 0 {
 		line("  %s", s.dim("(none)"))
 	} else {
@@ -419,6 +422,12 @@ func displayAddrs(h model.Host) string {
 }
 
 func hostAddrs(h model.Host) string {
+	if h.IPsHidden {
+		if h.CNAME != "" {
+			return "hidden, cname:" + cleanText(h.CNAME)
+		}
+		return "hidden"
+	}
 	var parts []string
 	parts = append(parts, h.IPs...)
 	parts = append(parts, h.AAAA...)
@@ -432,6 +441,9 @@ func hostAddrs(h model.Host) string {
 }
 
 func hostStatus(h model.Host) string {
+	if h.IPsHidden && !h.Resolved {
+		return "not checked"
+	}
 	if h.Resolved {
 		return "resolved"
 	}
