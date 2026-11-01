@@ -248,7 +248,7 @@ subsoil-example.com-20260101-120000/
     --timeout <dur>      per-query timeout (default 5s)
     --dns-servers <list> DNS servers (repeatable, comma separated, or system)
     --sources <list>     crt.sh, certspotter (default); otx, hackertarget, all, none
-    --source-timeout <d> per-source timeout (default 90s)
+    --source-timeout <d> per-source timeout (default 30s)
     --format <list>      text,json,md,html (default all)
 -o, --out <dir>          output directory
     --max-hosts <n>      cap on names resolved/reported (default 5000)
@@ -296,7 +296,14 @@ subsoil scan example.com --sources otx
 
 `SUBSOIL_OTX_KEY` is preferred; `OTX_API_KEY` is also accepted. `--sources all`
 includes OTX and will use the key if present. Without a key, OTX is skipped with
-an actionable error and no HTTP request is made.
+an actionable error and no HTTP request is made. OTX is attempted only once, so
+gateway errors do not hold up a scan; raise `--source-timeout` if needed.
+
+The JSON endpoint is
+`https://otx.alienvault.com/api/v1/indicators/domain/<domain>/passive_dns`.
+`https://otx.alienvault.com/api` by itself is the OTX web application and returns
+HTML, not JSON. OTX can return 504 independently of the request URL; when that
+happens, leave OTX out of `--sources` or retry the scan later.
 
 ## Custom wordlists
 
@@ -372,8 +379,8 @@ The default is 50 qps, which takes about 100 seconds for 5,000 words and about
 6m24s for the 20k list. `--fast` raises the rate to 250 qps with 50 workers
 (about 77 seconds for 19k words) at the cost of a much louder query pattern.
 You can also tune `--qps` and `--workers` yourself; keep workers around `qps/2`.
-Passive sources usually dominate wall time on small scans; `--source-timeout 25s`
-keeps a slow CT provider from stretching a run.
+Passive sources usually dominate wall time on small scans; the default
+per-source timeout is 30s and `--source-timeout` can lower it further.
 
 ---
 

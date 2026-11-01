@@ -127,7 +127,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		opt.Timeout = 5 * time.Second
 	}
 	if opt.SourceTimeout <= 0 {
-		opt.SourceTimeout = 60 * time.Second
+		opt.SourceTimeout = 30 * time.Second
 	}
 	if opt.MaxHosts <= 0 {
 		opt.MaxHosts = 5000
@@ -389,9 +389,10 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 			}
 		}
 		for src, serr := range pr.errs {
-			opt.Log.Warn("passive %s: %v", src, serr)
-			addErr("passive %s: %v", src, serr)
-			record("source_error", domain, "passive:"+src, map[string]any{"error": serr.Error()})
+			msg := strings.TrimPrefix(serr.Error(), src+": ")
+			opt.Log.Warn("passive %s: %s", src, msg)
+			addErr("passive %s: %s", src, msg)
+			record("source_error", domain, "passive:"+src, map[string]any{"error": msg})
 		}
 		passNames = dedupeSorted(passNames)
 		opt.Log.Verbose("passive names: %d unique", len(passNames))

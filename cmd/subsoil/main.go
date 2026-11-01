@@ -116,7 +116,7 @@ func cmdScan(args []string) int {
 	fs.Var(&dnsServers, "resolver", "alias for --dns-servers")
 	fs.Var(&dnsServers, "resolvers", "alias for --dns-servers")
 	fs.StringVar(&sources, "sources", strings.Join(passive.DefaultSources, ","), "passive sources")
-	fs.DurationVar(&sourceTimeout, "source-timeout", 90*time.Second, "per-source timeout")
+	fs.DurationVar(&sourceTimeout, "source-timeout", 30*time.Second, "per-source timeout")
 	fs.StringVar(&outDir, "o", "", "output directory")
 	fs.StringVar(&outDir, "out", "", "output directory")
 	fs.StringVar(&formats, "format", "text,json,md,html", "report formats")

@@ -43,14 +43,15 @@ type Options struct {
 }
 
 type httpSource struct {
-	name    string
-	url     func(base, domain string) string
-	parse   func([]byte) ([]string, error)
-	base    string
-	client  *http.Client
-	timeout time.Duration
-	apiKey  string
-	vlog    func(format string, args ...any)
+	name     string
+	url      func(base, domain string) string
+	parse    func([]byte) ([]string, error)
+	base     string
+	client   *http.Client
+	timeout  time.Duration
+	attempts int
+	apiKey   string
+	vlog     func(format string, args ...any)
 }
 
 func (s *httpSource) Name() string { return s.name }
@@ -71,8 +72,12 @@ func (s *httpSource) Lookup(ctx context.Context, domain string) ([]string, error
 		defer cancel()
 	}
 
+	attempts := s.attempts
+	if attempts <= 0 {
+		attempts = 3
+	}
 	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt < attempts; attempt++ {
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():
@@ -88,8 +93,8 @@ func (s *httpSource) Lookup(ctx context.Context, domain string) ([]string, error
 		if !retry || ctx.Err() != nil {
 			break
 		}
-		if attempt < 2 {
-			s.logf("%s: %v (retrying)", s.name, err)
+		if attempt < attempts-1 {
+			s.logf("retrying: %v", err)
 		}
 	}
 	return nil, lastErr
@@ -124,7 +129,7 @@ func (s *httpSource) fetch(ctx context.Context, domain string) ([]string, bool, 
 	}
 	if resp.StatusCode != http.StatusOK {
 		retry := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
-		msg := fmt.Sprintf("%s: HTTP %d", s.name, resp.StatusCode)
+		msg := fmt.Sprintf("%s: HTTP %d %s", s.name, resp.StatusCode, http.StatusText(resp.StatusCode))
 		var apiErr struct {
 			Detail string `json:"detail"`
 		}
@@ -172,7 +177,7 @@ func NewSource(name string, opts Options) (Source, bool) {
 	if base == "" {
 		return nil, false
 	}
-	s := &httpSource{name: name, base: base, client: opts.Client, timeout: opts.Timeout, apiKey: opts.OTXKey, vlog: opts.VerboseLog}
+	s := &httpSource{name: name, base: base, client: opts.Client, timeout: opts.Timeout, attempts: 3, apiKey: opts.OTXKey, vlog: opts.VerboseLog}
 	switch name {
 	case "crt.sh":
 		s.url = func(base, domain string) string {
@@ -192,6 +197,9 @@ func NewSource(name string, opts Options) (Source, bool) {
 		}
 		s.parse = parseCertSpotter
 	case "otx":
+		// OTX frequently returns 502/504; fail over to the next source instead
+		// of retrying the same gateway for a minute.
+		s.attempts = 1
 		s.url = func(base, domain string) string {
 			return strings.TrimSuffix(base, "/") + "/api/v1/indicators/domain/" + url.PathEscape(domain) + "/passive_dns"
 		}

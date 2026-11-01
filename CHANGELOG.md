@@ -12,6 +12,8 @@ All notable changes to Subsoil are documented here. The format follows
   `OTX_API_KEY`) support via the `X-OTX-API-KEY` header and removed OTX from the
   default sources. Missing keys now produce a clear error instead of an
   anonymous HTTP 403.
+- OTX gateway errors are no longer retried (single attempt), and the default
+  per-source timeout is reduced from 90s to 30s.
 
 ## [1.3.0]
 
