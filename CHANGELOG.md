@@ -6,13 +6,19 @@ All notable changes to Subsoil are documented here. The format follows
 
 ## [1.3.2]
 
+### Added
+
+- Interactive `graph.html` force-directed entity graph connecting domains, DNS
+  records, subdomains, IPs, nameservers, mail/SRV targets, HTTP/TLS, passive
+  sources, PTR, AXFR and wildcard findings.
+- A terminal activity spinner while a scan is running. It is hidden for non-TTY
+  output and can be disabled with `--no-spinner` or `--quiet`.
+
 ### Fixed
 
 - OTX connections that close before a response (`EOF`) are retried once.
 - OTX uses HTTP/1.1 and a stable `subsoil/<version>` User-Agent instead of a
   random browser UA.
-- Added a terminal activity spinner while a scan is running. It is hidden for
-  non-TTY output and can be disabled with `--no-spinner` or `--quiet`.
 
 ## [1.3.1]
 

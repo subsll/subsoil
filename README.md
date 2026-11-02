@@ -39,8 +39,8 @@ $ subsoil scan example.com --no-brute --verbose
   probing with TLS metadata.
 - **Tamper-evident evidence** — per-finding SHA-256 hashes, a hash chain, a
   verifier and a checksum manifest.
-- **Reports** — terminal, TXT, JSON, Markdown, standalone HTML, `subdomains.txt`
-  and `hosts.csv`.
+- **Reports** — terminal, TXT, JSON, Markdown, standalone HTML, an interactive
+  entity graph, `subdomains.txt` and `hosts.csv`.
 - **One portable binary** — no runtime, no Python, no external libraries.
 
 ---
@@ -123,6 +123,27 @@ reference and quick-start recipes.
 
 In `--passive` mode steps 2–5 are skipped entirely. You still get passive names,
 marked resolved or unresolved where known, plus source errors in the evidence log.
+
+---
+
+## Entity graph
+
+Every default scan also writes `graph.html`, a force-directed graph of the
+findings:
+
+- target domain → DNS record sets → IPs, nameservers and mail targets
+- discovered host → A/AAAA/CNAME and passive sources
+- PTR, SRV, HTTP/TLS, AXFR and wildcard relationships
+
+Drag nodes, scroll to zoom, and use the legend to isolate categories. Labels are
+shown for smaller graphs; larger graphs show details on hover. `graph.html`
+loads the ECharts runtime from the go-echarts asset host, so it needs network
+access. `report.html` remains fully self-contained.
+
+Use `--format graph` to generate only the graph and the always-present machine
+files, or add `graph` to a custom `--format` list. Very large scans are capped at
+2,500 graph entities and 5,000 relationships; the JSON, HTML and Markdown reports
+still contain all findings.
 
 ---
 
@@ -213,6 +234,7 @@ subsoil-example.com-20260101-120000/
 ├── report.txt               terminal report
 ├── report.md                Markdown evidence report
 ├── report.html              standalone HTML report
+├── graph.html               interactive entity graph
 ├── report.json              complete machine-readable result
 ├── subdomains.txt           one name per line
 ├── hosts.csv                name, status, addresses, hidden flag, sources, SHA-256
@@ -249,7 +271,7 @@ subsoil-example.com-20260101-120000/
     --dns-servers <list> DNS servers (repeatable, comma separated, or system)
     --sources <list>     crt.sh, certspotter (default); otx, hackertarget, all, none
     --source-timeout <d> per-source timeout (default 30s)
-    --format <list>      text,json,md,html (default all)
+    --format <list>      text,json,md,html,graph (default all)
 -o, --out <dir>          output directory
     --max-hosts <n>      cap on names resolved/reported (default 5000)
     --max-http <n>       cap on HTTP probes (default 200)

@@ -120,7 +120,7 @@ func cmdScan(args []string) int {
 	fs.DurationVar(&sourceTimeout, "source-timeout", 30*time.Second, "per-source timeout")
 	fs.StringVar(&outDir, "o", "", "output directory")
 	fs.StringVar(&outDir, "out", "", "output directory")
-	fs.StringVar(&formats, "format", "text,json,md,html", "report formats")
+	fs.StringVar(&formats, "format", "text,json,md,html,graph", "report formats")
 	fs.IntVar(&maxHosts, "max-hosts", 5000, "max names resolved")
 	fs.IntVar(&maxHTTP, "max-http", 200, "max HTTP probes")
 	fs.StringVar(&exclude, "exclude", "", "exclude regexp")
@@ -242,7 +242,7 @@ func cmdScan(args []string) int {
 	}
 	for _, f := range formatList {
 		switch f {
-		case "text", "json", "md", "markdown", "html":
+		case "text", "json", "md", "markdown", "html", "graph":
 		default:
 			fmt.Fprintf(os.Stderr, "subsoil: unknown format %q (want text, json, md, html)\n", f)
 			return 2
