@@ -256,6 +256,7 @@ subsoil-example.com-20260101-120000/
     --capture            save HTTP response bodies
     --exclude <regexp>   drop names matching a pattern
     --quiet              no progress or terminal report
+    --no-spinner         disable the terminal activity spinner
     --no-color           disable ANSI colour
 -v, --verbose            log every DNS query, passive request and probe
 ```
@@ -374,6 +375,14 @@ subsoil scan example.com --verbose
 ```
 
 ---
+
+## Terminal activity spinner
+
+While a scan is active, Subsoil draws a one-line spinner on stderr with the
+target and elapsed time. Log lines pause and redraw it so output stays readable.
+
+It is disabled automatically when stderr is not a terminal, and can be turned
+off with `--quiet` or `--no-spinner`.
 
 ## Performance
 

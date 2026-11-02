@@ -84,6 +84,7 @@ func cmdScan(args []string) int {
 		maxHTTP       int
 		exclude       string
 		noColor       bool
+		noSpinner     bool
 		quiet         bool
 		verbose       bool
 		fast          bool
@@ -124,6 +125,7 @@ func cmdScan(args []string) int {
 	fs.IntVar(&maxHTTP, "max-http", 200, "max HTTP probes")
 	fs.StringVar(&exclude, "exclude", "", "exclude regexp")
 	fs.BoolVar(&noColor, "no-color", false, "disable colour")
+	fs.BoolVar(&noSpinner, "no-spinner", false, "disable the terminal activity spinner")
 	fs.BoolVar(&quiet, "quiet", false, "quiet")
 	fs.BoolVar(&verbose, "v", false, "per-query and per-source logging")
 	fs.BoolVar(&verbose, "verbose", false, "per-query and per-source logging")
@@ -272,6 +274,13 @@ func cmdScan(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	var spin *spinner
+	if !quiet && !noSpinner && os.Getenv("TERM") != "dumb" && isTerminal(os.Stderr) {
+		spin = newSpinner(os.Stderr, "scanning "+domain, !noColor && colorFor(os.Stderr))
+		log.SetActivity(spin)
+		spin.Start()
+	}
+
 	res, err := scan.Run(ctx, scan.Options{
 		Domain:        domain,
 		OutDir:        outDir,
@@ -299,6 +308,10 @@ func cmdScan(args []string) int {
 		Exclude:       excl,
 		Log:           log,
 	})
+	if spin != nil {
+		spin.Stop()
+		log.SetActivity(nil)
+	}
 	scanErr := err
 	if scanErr != nil && res == nil {
 		fmt.Fprintf(os.Stderr, "subsoil: %v\n", scanErr)
