@@ -13,6 +13,7 @@ func TestSpinnerPauseResumeAndStop(t *testing.T) {
 	s := newSpinner(&buf, "scanning example.com", false)
 	s.interval = 5 * time.Millisecond
 	s.Start()
+	s.SetLabel("scanning example.com · baseline DNS")
 	time.Sleep(20 * time.Millisecond)
 	s.Pause()
 	fmt.Fprint(&buf, "[*] log line\n")
@@ -22,8 +23,8 @@ func TestSpinnerPauseResumeAndStop(t *testing.T) {
 	s.Stop()
 
 	out := buf.String()
-	if !strings.Contains(out, "scanning example.com") {
-		t.Fatalf("spinner label missing: %q", out)
+	if !strings.Contains(out, "baseline DNS") {
+		t.Fatalf("spinner stage missing: %q", out)
 	}
 	if !strings.Contains(out, "[*] log line") {
 		t.Fatalf("log line missing: %q", out)

@@ -69,6 +69,13 @@ type Options struct {
 	MaxHTTP       int
 	Exclude       *regexp.Regexp
 	Log           Logger
+	Stage         func(string)
+}
+
+func (o *Options) stage(name string) {
+	if o.Stage != nil {
+		o.Stage(name)
+	}
 }
 
 type agg struct {
@@ -229,10 +236,13 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		return true
 	}
 
+	opt.stage("preparing")
+
 	// Load the dictionary before any network work so a bad path fails fast
 	// and the wordlist is visible in the startup log.
 	var words []string
 	if opt.Brute && !opt.PassiveOnly {
+		opt.stage("loading wordlist")
 		if len(opt.WordlistPaths) > 0 {
 			var wl wordlist.Result
 			wl, err = wordlist.LoadPaths(opt.WordlistPaths)
@@ -291,6 +301,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		passNames []string
 	)
 	if len(opt.Sources) > 0 {
+		opt.stage("passive sources")
 		passCh = make(chan passResult, 1)
 		go func() {
 			names, errs := passive.Resolve(ctx, domain, opt.Sources, passive.Options{
@@ -310,6 +321,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		rr      *dnsx.Resolver
 	)
 	if !opt.PassiveOnly {
+		opt.stage("baseline DNS")
 		rr, err = dnsx.New(opt.Resolvers, opt.Timeout, opt.QPS)
 		if err != nil {
 			return res, err
@@ -354,6 +366,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	// Wildcard fingerprint, needed before brute forcing.
 	var wildcard model.Wildcard
 	if !opt.PassiveOnly {
+		opt.stage("wildcard detection")
 		w, werr := dnsx.DetectWildcard(ctx, rr, domain, 3)
 		if werr != nil {
 			addErr("wildcard detection: %v", werr)
@@ -371,6 +384,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 
 	// Collect passive names.
 	if passCh != nil {
+		opt.stage("passive sources")
 		pr := <-passCh
 		for _, src := range opt.Sources {
 			if _, failed := pr.errs[src]; failed {
@@ -409,6 +423,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		axfrCh    chan []model.AXFR
 	)
 	if opt.Brute && !opt.PassiveOnly {
+		opt.stage("brute force")
 		bruteCh = make(chan brute.Result, 1)
 		bruteStart := time.Now()
 		var progressMu sync.Mutex
@@ -458,6 +473,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	}
 
 	if !opt.PassiveOnly && !opt.NoIPLookup && len(passNames) > 0 {
+		opt.stage("resolving passive names")
 		names := append([]string(nil), passNames...)
 		resolveCh = make(chan []resolvedName, 1)
 		go func() {
@@ -466,6 +482,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	}
 
 	if opt.AXFR && !opt.PassiveOnly && len(nsNames) > 0 {
+		opt.stage("zone transfers")
 		opt.Log.Info("zone transfer: %d nameserver(s) to test", len(nsNames))
 		axfrCh = make(chan []model.AXFR, 1)
 		go func() {
@@ -474,6 +491,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	}
 
 	if resolveCh != nil {
+		opt.stage("resolving passive names")
 		for _, rn := range <-resolveCh {
 			if rn.err != nil {
 				if ctx.Err() == nil {
@@ -494,6 +512,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	}
 
 	if bruteCh != nil {
+		opt.stage("brute force")
 		br := <-bruteCh
 		res.Wildcard.Filtered = br.WildcardDrops
 		res.Stats.BruteTried = br.Tried
@@ -519,6 +538,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	}
 
 	if axfrCh != nil {
+		opt.stage("zone transfers")
 		res.AXFR = <-axfrCh
 		res.Stats.ZoneTransfers = len(res.AXFR)
 		ok := 0
@@ -553,6 +573,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 			if ctx.Err() != nil {
 				break
 			}
+			opt.stage("recursive scan " + parent)
 			pw, _ := dnsx.DetectWildcard(ctx, rr, parent, 2)
 			rres := brute.Run(ctx, rr, parent, sub, brute.Options{Workers: 8, IPv6: opt.IPv6, Wildcard: pw})
 			res.Stats.WildcardDrops += rres.WildcardDrops
@@ -568,6 +589,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 
 	// SRV records.
 	if opt.SRV && !opt.PassiveOnly && ctx.Err() == nil {
+		opt.stage("SRV records")
 		for _, svc := range srvServices {
 			rrs, rcode, qerr := rr.LookupType(ctx, svc+"."+domain, "SRV")
 			if qerr != nil || rcode != dns.RcodeSuccess || len(rrs) == 0 {
@@ -603,6 +625,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		opt.Log.Warn("--ptr skipped because --no-resolve-ips is set")
 	}
 	if opt.PTR && !opt.PassiveOnly && !opt.NoIPLookup && ctx.Err() == nil {
+		opt.stage("reverse DNS")
 		ips := make([]string, 0, 64)
 		for _, a := range hosts {
 			ips = append(ips, a.ipList()...)
@@ -642,6 +665,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 
 	// Web probes.
 	if opt.HTTP && !opt.PassiveOnly && ctx.Err() == nil {
+		opt.stage("HTTP probes")
 		var targets []string
 		for name, a := range hosts {
 			if a.resolved && (len(a.ips)+len(a.aaaa)) > 0 {
@@ -689,6 +713,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	}
 
 	// Emit the canonical host record: this hash is the per-finding proof.
+	opt.stage("collecting findings")
 	names := make([]string, 0, len(hosts))
 	for name := range hosts {
 		if !excluded(name) {
@@ -739,6 +764,7 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		addErr("scan interrupted: %v", ctx.Err())
 	}
 
+	opt.stage("finalizing evidence")
 	stats := map[string]any{
 		"dns_queries": res.Stats.DNSQueries, "passive_names": res.Stats.PassiveNames,
 		"brute_tried": res.Stats.BruteTried, "brute_hits": res.Stats.BruteHits,

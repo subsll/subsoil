@@ -275,8 +275,16 @@ func cmdScan(args []string) int {
 	defer stop()
 
 	var spin *spinner
+	var stage func(string)
 	if !quiet && !noSpinner && os.Getenv("TERM") != "dumb" && isTerminal(os.Stderr) {
 		spin = newSpinner(os.Stderr, "scanning "+domain, !noColor && colorFor(os.Stderr))
+		stage = func(step string) {
+			if step == "" {
+				spin.SetLabel("scanning " + domain)
+				return
+			}
+			spin.SetLabel("scanning " + domain + " · " + step)
+		}
 		log.SetActivity(spin)
 		spin.Start()
 	}
@@ -307,6 +315,7 @@ func cmdScan(args []string) int {
 		MaxHTTP:       maxHTTP,
 		Exclude:       excl,
 		Log:           log,
+		Stage:         stage,
 	})
 	if spin != nil {
 		spin.Stop()

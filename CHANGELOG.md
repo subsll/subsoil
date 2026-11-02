@@ -11,8 +11,9 @@ All notable changes to Subsoil are documented here. The format follows
 - Interactive `graph.html` force-directed entity graph connecting domains, DNS
   records, subdomains, IPs, nameservers, mail/SRV targets, HTTP/TLS, passive
   sources, PTR, AXFR and wildcard findings.
-- A terminal activity spinner while a scan is running. It is hidden for non-TTY
-  output and can be disabled with `--no-spinner` or `--quiet`.
+- A terminal activity spinner while a scan is running, with the current scan
+  phase (baseline DNS, passive sources, brute force, probes, etc.). It is hidden
+  for non-TTY output and can be disabled with `--no-spinner` or `--quiet`.
 
 ### Fixed
 

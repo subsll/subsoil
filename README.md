@@ -401,7 +401,11 @@ subsoil scan example.com --verbose
 ## Terminal activity spinner
 
 While a scan is active, Subsoil draws a one-line spinner on stderr with the
-target and elapsed time. Log lines pause and redraw it so output stays readable.
+target, the current phase and elapsed time. The phase changes as work moves
+through preparing, wordlist loading, passive sources, baseline DNS, wildcard
+detection, brute force, passive-name resolution, AXFR, recursive scans, SRV,
+PTR, HTTP probes, finding collection and evidence finalisation. Log lines pause
+and redraw it so output stays readable.
 
 It is disabled automatically when stderr is not a terminal, and can be turned
 off with `--quiet` or `--no-spinner`.

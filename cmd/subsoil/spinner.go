@@ -35,6 +35,19 @@ func newSpinner(w io.Writer, label string, color bool) *spinner {
 	}
 }
 
+// SetLabel changes the activity text without disturbing the animation.
+func (s *spinner) SetLabel(label string) {
+	if s == nil || label == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.label = label
+	if s.started && !s.stopped && !s.paused {
+		s.drawLocked()
+	}
+}
+
 func (s *spinner) Start() {
 	if s == nil || s.w == nil {
 		return
@@ -125,8 +138,12 @@ func (s *spinner) Resume() {
 
 func (s *spinner) drawLocked() {
 	frame := spinnerFrames[s.frame%len(spinnerFrames)]
+	label := []rune(s.label)
+	if len(label) > 72 {
+		label = append(label[:69], '.', '.', '.')
+	}
 	elapsed := formatSpinnerElapsed(time.Since(s.start))
-	fmt.Fprintf(s.w, "\r\033[2K  %s %s  %s", frame, s.p.dim(s.label), s.p.dim(elapsed))
+	fmt.Fprintf(s.w, "\r\033[2K  %s %s  %s", frame, s.p.dim(string(label)), s.p.dim(elapsed))
 }
 
 func (s *spinner) clearLocked() {
