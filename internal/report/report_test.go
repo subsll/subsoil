@@ -54,11 +54,11 @@ func fixture(t *testing.T) (*model.Result, string) {
 
 func TestWriteAllFormats(t *testing.T) {
 	res, dir := fixture(t)
-	files, err := Write(res, dir, []string{"text", "json", "md", "html"})
+	files, err := Write(res, dir, []string{"text", "json", "md", "html", "graph"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"evidence.jsonl.sha256", "hosts.csv", "report.html", "report.json", "report.md", "report.txt", "subdomains.txt"}
+	want := []string{"evidence.jsonl.sha256", "graph.html", "hosts.csv", "report.html", "report.json", "report.md", "report.txt", "subdomains.txt"}
 	for _, w := range want {
 		if !contains(files, w) {
 			t.Fatalf("missing %s in %v", w, files)

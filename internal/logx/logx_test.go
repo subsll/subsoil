@@ -39,3 +39,25 @@ func TestNilLogger(t *testing.T) {
 	l.Info("no panic")
 	l.Verbose("no panic")
 }
+
+type recordActivity struct {
+	events []string
+}
+
+func (a *recordActivity) Pause()  { a.events = append(a.events, "pause") }
+func (a *recordActivity) Resume() { a.events = append(a.events, "resume") }
+
+func TestLoggerPausesActivity(t *testing.T) {
+	var buf bytes.Buffer
+	l := New(&buf, false)
+	a := &recordActivity{}
+	l.SetActivity(a)
+	l.Info("hello")
+
+	if !strings.Contains(buf.String(), "[*] hello") {
+		t.Fatalf("log output = %q", buf.String())
+	}
+	if len(a.events) != 2 || a.events[0] != "pause" || a.events[1] != "resume" {
+		t.Fatalf("activity events = %v", a.events)
+	}
+}

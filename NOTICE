@@ -31,3 +31,17 @@ SecLists is distributed under the MIT License:
 
 The lists were lowercased, filtered to valid single DNS labels, de-duplicated
 and gzip-compressed. No other changes were made.
+
+Interactive graph library
+=========================
+
+internal/report/graph.go uses:
+
+  go-echarts — https://github.com/go-echarts/go-echarts
+  Copyright (c) go-echarts contributors
+
+Licensed under the Apache License, Version 2.0:
+  https://github.com/go-echarts/go-echarts/blob/master/LICENSE
+
+graph.html loads the Apache ECharts runtime from the go-echarts asset host; the
+runtime is not redistributed in this repository.

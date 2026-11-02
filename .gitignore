@@ -1,5 +1,6 @@
 # Build output
 dist/
+/subsoil
 subsoil-*/
 *.test
 *.out

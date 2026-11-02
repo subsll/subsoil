@@ -179,6 +179,7 @@ const htmlTemplate = `<!doctype html>
 <main>
   <h1>Subsoil reconnaissance report</h1>
   <div class="sub"><strong>{{.Domain}}</strong> · generated {{datetime .Finished}} · Subsoil {{.Version}}</div>
+  {{if .Graph}}<div class="pill"><a href="graph.html">Open interactive entity graph →</a></div>{{end}}
 
   <div class="grid">
     <div class="card"><div class="k">Subdomains</div><div class="v">{{len .Hosts}}</div></div>

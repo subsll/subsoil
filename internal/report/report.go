@@ -1,5 +1,6 @@
 // Package report renders scan results as terminal output, JSON, Markdown,
-// HTML and CSV, and writes a checksum manifest for every artefact.
+// HTML, an interactive entity graph and CSV, and writes a checksum manifest for
+// every artefact.
 package report
 
 import (
@@ -45,6 +46,13 @@ func Write(res *model.Result, dir string, formats []string) ([]string, error) {
 	}
 	var files []string
 	add := func(name string) { files = append(files, name) }
+
+	graphRequested := false
+	for _, f := range formats {
+		if strings.EqualFold(strings.TrimSpace(f), "graph") {
+			graphRequested = true
+		}
+	}
 
 	// Machine-readable host lists are always produced.
 	var sub strings.Builder
@@ -103,15 +111,20 @@ func Write(res *model.Result, dir string, formats []string) ([]string, error) {
 			add("report.md")
 		case "html":
 			var buf bytes.Buffer
-			if err := renderHTML(&buf, res); err != nil {
+			if err := renderHTML(&buf, res, graphRequested); err != nil {
 				return nil, err
 			}
 			if err := os.WriteFile(filepath.Join(dir, "report.html"), buf.Bytes(), 0o644); err != nil {
 				return nil, err
 			}
 			add("report.html")
+		case "graph":
+			if err := writeGraph(filepath.Join(dir, "graph.html"), res); err != nil {
+				return nil, err
+			}
+			add("graph.html")
 		default:
-			return nil, fmt.Errorf("unknown output format %q (want text, json, md, html)", f)
+			return nil, fmt.Errorf("unknown output format %q (want text, json, md, html, graph)", f)
 		}
 	}
 
@@ -592,7 +605,12 @@ func safeURL(s string) template.URL {
 	return template.URL("#")
 }
 
-func renderHTML(w io.Writer, res *model.Result) error {
+type htmlView struct {
+	*model.Result
+	Graph bool
+}
+
+func renderHTML(w io.Writer, res *model.Result, graph bool) error {
 	t, err := template.New("html").Funcs(template.FuncMap{
 		"join": strings.Join, "dash": dash, "addrs": hostAddrs, "status": hostStatus,
 		"datetime": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05 UTC") },
@@ -603,5 +621,5 @@ func renderHTML(w io.Writer, res *model.Result) error {
 	if err != nil {
 		return err
 	}
-	return t.Execute(w, res)
+	return t.Execute(w, htmlView{Result: res, Graph: graph})
 }

@@ -205,12 +205,14 @@ func TestScanNoIPLookup(t *testing.T) {
 	dir := t.TempDir()
 	words := writeWords(t, dir, []string{"www", "nope"})
 
+	var stages []string
 	res, err := Run(context.Background(), Options{
 		Domain:        "example.test",
 		OutDir:        dir,
 		Brute:         true,
 		PTR:           true,
 		NoIPLookup:    true,
+		Stage:         func(s string) { stages = append(stages, s) },
 		WordlistPaths: []string{words},
 		Workers:       2,
 		QPS:           0,
@@ -239,6 +241,18 @@ func TestScanNoIPLookup(t *testing.T) {
 	}
 	if len(res.PTR) != 0 {
 		t.Fatalf("PTR results = %+v", res.PTR)
+	}
+	for _, want := range []string{"baseline DNS", "wildcard detection", "brute force", "collecting findings"} {
+		found := false
+		for _, stage := range stages {
+			if stage == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing stage %q in %v", want, stages)
+		}
 	}
 
 	f, err := os.Open(res.Evidence.File)
