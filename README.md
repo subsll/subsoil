@@ -11,6 +11,8 @@ collection, DNS baseline, wildcard-aware brute forcing, zone-transfer checks, SR
 enumeration and one-shot HTTP(S) probing. Every finding is written to a SHA-256
 hash-chained evidence log so results can be verified later.
 
+![Subsoil terminal help screen](docs/assets/subsoil-screenshot.png)
+
 ```text
 $ subsoil scan example.com --no-brute --verbose
   Subsoil 1.3.2  ·  low-observable DNS reconnaissance
