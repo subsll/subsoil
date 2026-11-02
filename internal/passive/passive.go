@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"subsoil/internal/model"
 	"subsoil/internal/webx"
 )
 
@@ -103,6 +104,9 @@ func (s *httpSource) Lookup(ctx context.Context, domain string) ([]string, error
 			s.logf("retrying: %v", err)
 		}
 	}
+	if lastErr != nil && (errors.Is(lastErr, io.EOF) || errors.Is(lastErr, io.ErrUnexpectedEOF)) {
+		return nil, fmt.Errorf("%s: connection closed before a response (EOF); source skipped", s.name)
+	}
 	if lastErr != nil && errors.Is(lastErr, context.DeadlineExceeded) {
 		return nil, fmt.Errorf("%s: timed out after %s; source skipped", s.name, s.timeout)
 	}
@@ -114,7 +118,11 @@ func (s *httpSource) fetch(ctx context.Context, domain string) ([]string, bool, 
 	if err != nil {
 		return nil, false, err
 	}
-	req.Header.Set("User-Agent", webx.RandomUA())
+	if s.name == "otx" {
+		req.Header.Set("User-Agent", model.ToolName+"/"+model.Version)
+	} else {
+		req.Header.Set("User-Agent", webx.RandomUA())
+	}
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.8")
 	if s.name == "otx" && s.apiKey != "" {
@@ -138,6 +146,9 @@ func (s *httpSource) fetch(ctx context.Context, domain string) ([]string, bool, 
 	}
 	if resp.StatusCode != http.StatusOK {
 		retry := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+		if s.name == "otx" {
+			retry = false
+		}
 		msg := fmt.Sprintf("%s: HTTP %d %s", s.name, resp.StatusCode, http.StatusText(resp.StatusCode))
 		var apiErr struct {
 			Detail string `json:"detail"`
@@ -176,6 +187,7 @@ func (s *httpSource) fetch(ctx context.Context, domain string) ([]string, bool, 
 
 // NewSource builds a source by name. Unknown names return nil, false.
 func NewSource(name string, opts Options) (Source, bool) {
+	customClient := opts.Client != nil
 	if opts.Client == nil {
 		opts.Client = webx.NewClient(opts.Timeout, false)
 	}
@@ -207,8 +219,16 @@ func NewSource(name string, opts Options) (Source, bool) {
 		s.parse = parseCertSpotter
 	case "otx":
 		// OTX frequently returns 502/504; fail over to the next source instead
-		// of retrying the same gateway for a minute.
-		s.attempts = 1
+		// of retrying the same gateway for a minute. A dropped connection gets
+		// one retry; HTTP error responses do not.
+		s.attempts = 2
+		if !customClient {
+			if tr, ok := s.client.Transport.(*http.Transport); ok {
+				clone := tr.Clone()
+				clone.ForceAttemptHTTP2 = false
+				s.client = &http.Client{Transport: clone, Timeout: s.client.Timeout}
+			}
+		}
 		s.url = func(base, domain string) string {
 			// base is https://otx.alienvault.com/api
 			return strings.TrimSuffix(base, "/") + "/v1/indicators/domain/" + url.PathEscape(domain) + "/passive_dns"

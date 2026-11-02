@@ -4,6 +4,14 @@ All notable changes to Subsoil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.3.2]
+
+### Fixed
+
+- OTX connections that close before a response (`EOF`) are retried once.
+- OTX uses HTTP/1.1 and a stable `subsoil/<version>` User-Agent instead of a
+  random browser UA.
+
 ## [1.3.1]
 
 ### Fixed

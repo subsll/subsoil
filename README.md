@@ -13,7 +13,7 @@ hash-chained evidence log so results can be verified later.
 
 ```text
 $ subsoil scan example.com --no-brute --verbose
-  Subsoil 1.3.1  ·  low-observable DNS reconnaissance
+  Subsoil 1.3.2  ·  low-observable DNS reconnaissance
   target example.com  ·  standard  ·  50 qps  ·  20 workers
 
 [v] config: target=example.com resolvers=1.1.1.1:53 sources=crt.sh,certspotter workers=20 qps=50 timeout=5s
@@ -296,9 +296,10 @@ subsoil scan example.com --sources otx
 
 `SUBSOIL_OTX_KEY` is preferred; `OTX_API_KEY` is also accepted. `--sources all`
 includes OTX and will use the key if present. Without a key, OTX is skipped with
-an actionable error and no HTTP request is made. OTX is attempted only once and capped at 15s, so
-gateway errors and timeouts do not hold up a scan; raise `--source-timeout` for
-the other sources if needed.
+an actionable error and no HTTP request is made. OTX is capped at 15s. HTTP error responses are not retried; a dropped
+connection (`EOF`) gets one retry. This keeps gateway errors and dead
+connections from holding up a scan; raise `--source-timeout` for the other
+sources if needed.
 
 The JSON endpoint is
 `https://otx.alienvault.com/api/v1/indicators/domain/<domain>/passive_dns`.

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -114,6 +115,9 @@ func TestOTXKeyHeader(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-OTX-API-KEY"); got != "sekret" {
 			t.Errorf("X-OTX-API-KEY = %q", got)
+		}
+		if got := r.Header.Get("User-Agent"); !strings.HasPrefix(got, "subsoil/") {
+			t.Errorf("User-Agent = %q, want a subsoil/ UA", got)
 		}
 		_, _ = w.Write([]byte(`{"passive_dns":[{"hostname":"www.example.com"},{"hostname":"*.dev.example.com"}]}`))
 	}))
@@ -230,5 +234,47 @@ func TestOTXTimeout(t *testing.T) {
 	_, err := s.Lookup(t.Context(), "example.com")
 	if err == nil || !strings.Contains(err.Error(), "timed out after") {
 		t.Fatalf("error = %v, want a timeout message", err)
+	}
+}
+
+func TestOTXRetriesEOF(t *testing.T) {
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&requests, 1) == 1 {
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				t.Error("response writer is not a hijacker")
+				return
+			}
+			conn, _, err := hj.Hijack()
+			if err != nil {
+				t.Errorf("hijack: %v", err)
+				return
+			}
+			_ = conn.Close()
+			return
+		}
+		_, _ = w.Write([]byte(`{"passive_dns":[{"hostname":"www.example.com"}]}`))
+	}))
+	defer srv.Close()
+
+	s, ok := NewSource("otx", Options{
+		Client:    srv.Client(),
+		Timeout:   5 * time.Second,
+		Endpoints: map[string]string{"otx": srv.URL},
+		OTXKey:    "sekret",
+	})
+	if !ok {
+		t.Fatal("otx source not available")
+	}
+	names, err := s.Lookup(t.Context(), "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 1 || names[0] != "www.example.com" {
+		t.Fatalf("names = %v", names)
+	}
+	if got := atomic.LoadInt32(&requests); got != 2 {
+		t.Fatalf("requests = %d, want 2", got)
 	}
 }
