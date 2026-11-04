@@ -3,7 +3,7 @@ SHELL := /bin/sh
 VERSION ?= 1.3.2
 GO      ?= go
 DIST    := dist
-LDFLAGS := -s -w -X subsoil/internal/model.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/subsll/subsoil/internal/model.Version=$(VERSION)
 
 .PHONY: all build local test race vet fmt linux checksums clean
 

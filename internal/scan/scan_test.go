@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"subsoil/internal/evidence"
-	"subsoil/internal/model"
-	"subsoil/internal/report"
-	"subsoil/internal/testutil"
+	"github.com/subsll/subsoil/internal/evidence"
+	"github.com/subsll/subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/report"
+	"github.com/subsll/subsoil/internal/testutil"
 )
 
 func TestScanActive(t *testing.T) {

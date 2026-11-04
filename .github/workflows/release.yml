@@ -47,7 +47,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
           go build -trimpath -buildvcs=false \
-            -ldflags "-s -w -X subsoil/internal/model.Version=${version}" \
+            -ldflags "-s -w -X github.com/subsll/subsoil/internal/model.Version=${version}" \
             -o "dist/subsoil_${version}_${{ matrix.suffix }}" ./cmd/subsoil
 
       - uses: actions/upload-artifact@v4

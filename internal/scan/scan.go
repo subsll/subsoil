@@ -16,13 +16,13 @@ import (
 	"sync"
 	"time"
 
-	"subsoil/internal/brute"
-	"subsoil/internal/dnsx"
-	"subsoil/internal/evidence"
-	"subsoil/internal/model"
-	"subsoil/internal/passive"
-	"subsoil/internal/probe"
-	"subsoil/internal/wordlist"
+	"github.com/subsll/subsoil/internal/brute"
+	"github.com/subsll/subsoil/internal/dnsx"
+	"github.com/subsll/subsoil/internal/evidence"
+	"github.com/subsll/subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/passive"
+	"github.com/subsll/subsoil/internal/probe"
+	"github.com/subsll/subsoil/internal/wordlist"
 
 	"github.com/miekg/dns"
 )

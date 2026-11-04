@@ -1,4 +1,4 @@
-module subsoil
+module github.com/subsll/subsoil
 
 go 1.25.0
 

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/model"
 )
 
 func fixture(t *testing.T) (*model.Result, string) {

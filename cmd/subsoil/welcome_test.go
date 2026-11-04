@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/model"
 )
 
 func TestWelcomePlain(t *testing.T) {

@@ -49,6 +49,30 @@ $ subsoil scan example.com --no-brute --verbose
 
 ## Install
 
+### Install with Go (recommended)
+
+Requires Go 1.25 or newer. This installs the latest tagged release:
+
+```sh
+go install github.com/subsll/subsoil/cmd/subsoil@latest
+```
+
+`go install` writes the binary to Go's bin directory. If `subsoil` is not found
+afterwards, add that directory to your `PATH`:
+
+```sh
+export PATH="$(go env GOPATH)/bin:$PATH"
+```
+
+Verify the installation:
+
+```sh
+subsoil version
+```
+
+Run the same `go install github.com/subsll/subsoil/cmd/subsoil@latest` command
+again at any time to upgrade to the latest release.
+
 ### Prebuilt binaries
 
 Download the latest Linux release from the repository's **Releases** page. Each
@@ -66,18 +90,13 @@ chmod +x subsoil_<version>_linux_amd64
 Requires Go 1.25 or newer.
 
 ```sh
-git clone <repository-url>
+git clone https://github.com/subsll/subsoil.git
 cd subsoil
 go test ./...
 make build          # dist/subsoil for the current platform
 make linux          # static Linux binaries
 make checksums      # dist/SHA256SUMS
 ```
-
-The module path is `subsoil`. If you publish this under GitHub and want
-`go install github.com/<owner>/subsoil/cmd/subsoil@latest` to work, update
-`module` in `go.mod` and the `subsoil/...` imports first. See
-[CONTRIBUTING.md](CONTRIBUTING.md#module-path).
 
 ---
 
@@ -489,17 +508,12 @@ DNS server, mock HTTP servers and fixture passive sources locally.
 
 ### Module path
 
-The module is declared as `subsoil` so the tree builds without a hosting account.
-To publish on GitHub and support `go install`, change it to your repository path:
-
-```sh
-# Example: github.com/your-name/subsoil
-find . -name '*.go' -print0 | xargs -0 perl -pi -e 's{"subsoil/}{"github.com/your-name/subsoil/}g'
-perl -pi -e 's{^module subsoil$}{module github.com/your-name/subsoil}' go.mod
-```
-
-Also update the `-X subsoil/internal/model.Version` path in `Makefile` and
-`.github/workflows/release.yml`.
+The canonical module path is `github.com/subsll/subsoil`. It matches the
+repository URL, so the copy-paste install command above resolves the latest
+release correctly. If the repository is moved or forked under another URL,
+rename the module and all internal imports together, then update the
+`-X github.com/subsll/subsoil/internal/model.Version` linker paths in `Makefile`
+and `.github/workflows/release.yml`.
 
 CI runs formatting, vet, race tests and a static build for pushes to `main` or
 `master` and for pull requests. Pushing a `v*` tag builds the four Linux binaries and attaches them to a

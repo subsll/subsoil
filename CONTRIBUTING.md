@@ -37,16 +37,10 @@ required.
 
 ## Module path
 
-The module is declared as `subsoil`, which builds anywhere. To publish the
-project as `github.com/<owner>/subsoil` and support `go install`, rewrite the
-module path and imports once:
-
-```sh
-find . -name '*.go' -print0 | xargs -0 perl -pi -e 's{"subsoil/}{"github.com/<owner>/subsoil/}g'
-perl -pi -e 's{^module subsoil$}{module github.com/<owner>/subsoil}' go.mod
-```
-
-Also update the `-X subsoil/internal/model.Version` path in `Makefile` and
+The module path is `github.com/subsll/subsoil`, matching the repository URL so
+that `go install github.com/subsll/subsoil/cmd/subsoil@latest` works. If you
+publish a fork under another URL, rename the module and all internal imports,
+then update the `-X .../internal/model.Version` linker paths in `Makefile` and
 `.github/workflows/release.yml`.
 
 ## Releasing

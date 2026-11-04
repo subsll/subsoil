@@ -11,7 +11,7 @@ import (
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/opts"
 
-	"subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/model"
 )
 
 const (

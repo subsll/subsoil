@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"subsoil/internal/testutil"
+	"github.com/subsll/subsoil/internal/testutil"
 
 	"github.com/miekg/dns"
 )

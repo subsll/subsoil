@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"subsoil/internal/dnsx"
-	"subsoil/internal/model"
-	"subsoil/internal/testutil"
+	"github.com/subsll/subsoil/internal/dnsx"
+	"github.com/subsll/subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/testutil"
 )
 
 func TestProgressCountsFilteredAttempts(t *testing.T) {

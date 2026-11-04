@@ -6,7 +6,7 @@ import "time"
 
 const ToolName = "subsoil"
 
-// Version is overridden at build time with -ldflags "-X subsoil/internal/model.Version=..."
+// Version is overridden at build time with -ldflags "-X github.com/subsll/subsoil/internal/model.Version=..."
 var Version = "dev"
 
 // ScanOptions is the serialisable subset of the runtime configuration that is

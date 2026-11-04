@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/model"
 )
 
 func TestBuildGraphConnectsEntities(t *testing.T) {

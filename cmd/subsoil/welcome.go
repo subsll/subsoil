@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/model"
 )
 
 // banner is the shadow-font wordmark shown by the welcome screen. Keep it

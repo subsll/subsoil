@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"subsoil/internal/model"
-	"subsoil/internal/webx"
+	"github.com/subsll/subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/webx"
 )
 
 // Options configures a probe.

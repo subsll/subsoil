@@ -18,13 +18,13 @@ import (
 	"syscall"
 	"time"
 
-	"subsoil/internal/dnsx"
-	"subsoil/internal/evidence"
-	"subsoil/internal/logx"
-	"subsoil/internal/model"
-	"subsoil/internal/passive"
-	"subsoil/internal/report"
-	"subsoil/internal/scan"
+	"github.com/subsll/subsoil/internal/dnsx"
+	"github.com/subsll/subsoil/internal/evidence"
+	"github.com/subsll/subsoil/internal/logx"
+	"github.com/subsll/subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/passive"
+	"github.com/subsll/subsoil/internal/report"
+	"github.com/subsll/subsoil/internal/scan"
 )
 
 func main() { os.Exit(run(os.Args[1:])) }

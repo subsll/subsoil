@@ -19,7 +19,7 @@ import (
 	texttemplate "text/template"
 	"time"
 
-	"subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/model"
 )
 
 var mdFuncs = texttemplate.FuncMap{

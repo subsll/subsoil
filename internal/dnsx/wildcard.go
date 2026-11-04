@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"subsoil/internal/model"
+	"github.com/subsll/subsoil/internal/model"
 
 	"github.com/miekg/dns"
 )
