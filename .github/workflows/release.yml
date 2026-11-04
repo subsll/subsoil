@@ -50,7 +50,7 @@ jobs:
             -ldflags "-s -w -X github.com/subsll/subsoil/internal/model.Version=${version}" \
             -o "dist/subsoil_${version}_${{ matrix.suffix }}" ./cmd/subsoil
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: subsoil-${{ matrix.suffix }}
           path: dist/*
