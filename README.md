@@ -15,7 +15,7 @@ hash-chained evidence log so results can be verified later.
 
 ```text
 $ subsoil scan example.com --no-brute --verbose
-  Subsoil 1.3.2  ·  low-observable DNS reconnaissance
+  Subsoil 1.4.0  ·  low-observable DNS reconnaissance
   target example.com  ·  standard  ·  50 qps  ·  20 workers
 
 [v] config: target=example.com resolvers=1.1.1.1:53 sources=crt.sh,certspotter workers=20 qps=50 timeout=5s
@@ -119,6 +119,9 @@ subsoil scan example.com -e --axfr --recursive --http --capture --fast
 
 # Verify a run later.
 subsoil verify subsoil-example.com-<timestamp>/evidence.jsonl
+
+# Check whether a captured file is already in a case.
+subsoil compare captured.bin --case subsoil-example.com-<timestamp>/
 ```
 
 `subsoil example.com` is shorthand for `subsoil scan example.com`. Run `subsoil`
@@ -248,6 +251,54 @@ third-party attestation.
 
 ---
 
+## Compare a file against a case
+
+`subsoil compare` streams a file, computes its SHA-256, verifies the case's
+evidence chain and searches every SHA-256 value recorded in the case:
+
+```sh
+subsoil compare captured.bin --case subsoil-example.com-<timestamp>/
+```
+
+The case argument can be a scan directory or a direct `evidence.jsonl` path. It
+checks HTTP body hashes, record hashes, RRset hashes and other SHA-256 fields in
+the evidence records.
+
+```text
+case        subsoil-example.com-<timestamp>/evidence.jsonl
+records     19
+chain       OK
+sidecar     matches evidence.jsonl.sha256
+file        /tmp/captured.bin
+size        18422
+sha256      6a5d...
+result      ALREADY CAPTURED
+matches     1
+  seq 12  type=http  target=www.example.com  source=http  field=data.body_sha256
+```
+
+If nothing matches:
+
+```text
+result      NEW EVIDENCE
+matches     0
+```
+
+Compare a bare digest instead of a file:
+
+```sh
+subsoil compare --hash 6a5d... --case subsoil-example.com-<timestamp>/
+```
+
+Machine-readable output:
+
+```sh
+subsoil compare captured.bin --case subsoil-example.com-<timestamp>/ --json
+```
+
+Exit codes for `compare`: `0` already captured, `1` new evidence, `2`
+usage/error or an invalid case chain.
+
 ## Output
 
 ```text
@@ -304,8 +355,9 @@ subsoil-example.com-20260101-120000/
 -v, --verbose            log every DNS query, passive request and probe
 ```
 
-Exit codes: `0` success, `1` error or broken evidence, `2` usage error,
-`130` interrupted (a partial report is still written).
+Exit codes: `scan`/`verify` use `0` success, `1` error or broken evidence;
+`compare` uses `0` already captured, `1` new evidence. Usage or comparison
+errors use `2`. Interrupted scans use `130` and still write a partial report.
 
 ---
 

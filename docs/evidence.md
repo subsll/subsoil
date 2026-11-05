@@ -156,6 +156,24 @@ object, so it is covered too.
 the bytes did not change after the scan; it does not prove the server returns
 the same bytes to every client.
 
+## Comparing a file to a case
+
+`subsoil compare` hashes a file and searches the verified evidence records for
+that digest. It matches `data.body_sha256` from HTTP probes, top-level record
+hashes, RRset hashes (`rrs_sha256`), AXFR record-set hashes and any other
+SHA-256-shaped string in the record data.
+
+```sh
+subsoil compare captured.bin --case subsoil-example.com-<timestamp>/
+subsoil compare --hash <sha256> --case subsoil-example.com-<timestamp>/
+```
+
+The command verifies the chain and, when present, the
+`evidence.jsonl.sha256` sidecar before comparing. A match reports the evidence
+sequence, record type, target, source and JSON field. Exit codes are `0` for an
+existing match, `1` for new evidence and `2` for usage or integrity errors.
+`--json` emits a machine-readable result.
+
 ## What a hash proves, and what it does not
 
 **Proves:** the log existed in this exact form at the time you received it, the
