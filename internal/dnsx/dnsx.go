@@ -27,9 +27,55 @@ type Resolver struct {
 	limiter *Limiter
 	queries atomic.Int64
 
+	udpClient *dns.Client
+	tcpClient *dns.Client
+
+	mu        sync.Mutex
+	next      int
+	connMu    sync.Mutex
+	connPools map[string]*connPool
+	vlog      func(format string, args ...any)
+}
+
+// maxUDPQueriesPerConn bounds how long one source port is reused. Reusing a
+// small number of sockets avoids filling home-router NAT/conntrack tables
+// during large brute-force runs; periodic rotation retains source-port
+// diversity.
+const maxUDPQueriesPerConn = 512
+
+type udpConn struct {
+	conn *dns.Conn
+	uses int
+}
+
+const maxIdleUDPConnsPerServer = 64
+
+type connPool struct {
 	mu   sync.Mutex
-	next int
-	vlog func(format string, args ...any)
+	idle []*udpConn
+}
+
+func (p *connPool) get() *udpConn {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	n := len(p.idle)
+	if n == 0 {
+		return nil
+	}
+	uc := p.idle[n-1]
+	p.idle = p.idle[:n-1]
+	return uc
+}
+
+func (p *connPool) put(uc *udpConn) {
+	p.mu.Lock()
+	if len(p.idle) >= maxIdleUDPConnsPerServer {
+		p.mu.Unlock()
+		_ = uc.conn.Close()
+		return
+	}
+	p.idle = append(p.idle, uc)
+	p.mu.Unlock()
 }
 
 // New builds a resolver. qps <= 0 disables pacing.
@@ -41,9 +87,12 @@ func New(servers []string, timeout time.Duration, qps int) (*Resolver, error) {
 		timeout = 5 * time.Second
 	}
 	return &Resolver{
-		servers: servers,
-		timeout: timeout,
-		limiter: NewLimiter(qps),
+		servers:   servers,
+		timeout:   timeout,
+		limiter:   NewLimiter(qps),
+		udpClient: &dns.Client{Net: "udp", Timeout: timeout},
+		tcpClient: &dns.Client{Net: "tcp", Timeout: timeout},
+		connPools: make(map[string]*connPool),
 	}, nil
 }
 
@@ -238,15 +287,75 @@ func (r *Resolver) Exchange(ctx context.Context, m *dns.Msg) (*dns.Msg, error) {
 func (r *Resolver) exchange(ctx context.Context, m *dns.Msg, server, network string) (*dns.Msg, error) {
 	qctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
-	c := &dns.Client{Net: network, Timeout: r.timeout}
-	resp, _, err := c.ExchangeContext(qctx, m, server)
+
+	switch network {
+	case "udp":
+		uc, err := r.getUDPConn(qctx, server)
+		if err != nil {
+			return nil, err
+		}
+		resp, _, err := r.udpClient.ExchangeWithConnContext(qctx, m, uc.conn)
+		if err != nil {
+			_ = uc.conn.Close()
+			return nil, err
+		}
+		if resp == nil {
+			_ = uc.conn.Close()
+			return nil, errors.New("empty response")
+		}
+		uc.uses++
+		r.putUDPConn(server, uc)
+		return resp, nil
+	case "tcp":
+		conn, err := r.tcpClient.DialContext(qctx, server)
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		resp, _, err := r.tcpClient.ExchangeWithConnContext(qctx, m, conn)
+		if err != nil {
+			return nil, err
+		}
+		if resp == nil {
+			return nil, errors.New("empty response")
+		}
+		return resp, nil
+	default:
+		return nil, fmt.Errorf("dnsx: unsupported network %q", network)
+	}
+}
+
+func (r *Resolver) getUDPConn(ctx context.Context, server string) (*udpConn, error) {
+	if uc := r.udpPool(server).get(); uc != nil {
+		return uc, nil
+	}
+	conn, err := r.udpClient.DialContext(ctx, server)
 	if err != nil {
 		return nil, err
 	}
-	if resp == nil {
-		return nil, errors.New("empty response")
+	return &udpConn{conn: conn}, nil
+}
+
+func (r *Resolver) putUDPConn(server string, uc *udpConn) {
+	if uc == nil || uc.conn == nil {
+		return
 	}
-	return resp, nil
+	if uc.uses >= maxUDPQueriesPerConn {
+		_ = uc.conn.Close()
+		return
+	}
+	r.udpPool(server).put(uc)
+}
+
+func (r *Resolver) udpPool(server string) *connPool {
+	r.connMu.Lock()
+	defer r.connMu.Unlock()
+	pool := r.connPools[server]
+	if pool == nil {
+		pool = &connPool{}
+		r.connPools[server] = pool
+	}
+	return pool
 }
 
 func describeQuestion(m *dns.Msg) string {

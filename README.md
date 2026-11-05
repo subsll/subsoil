@@ -489,8 +489,11 @@ The default is 50 qps, which takes about 100 seconds for 5,000 words and about
 6m24s for the 20k list. `--fast` raises the rate to 250 qps with 50 workers
 (about 77 seconds for 19k words) at the cost of a much louder query pattern.
 You can also tune `--qps` and `--workers` yourself; keep workers around `qps/2`.
-Passive sources usually dominate wall time on small scans; the default
-per-source timeout is 30s and `--source-timeout` can lower it further.
+Subsoil reuses a bounded pool of UDP sockets per resolver and rotates each
+socket after 512 queries, so a brute-force run creates a small number of
+router/NAT flows instead of one per word. Passive sources usually dominate wall
+time on small scans; the default per-source timeout is 30s and
+`--source-timeout` can lower it further.
 
 ---
 
@@ -523,6 +526,10 @@ initial DNS recon does not need.
 - **ASCII domains only.** Pass IDN targets as punycode.
 - **Unresolved names are kept and marked.** Certificate transparency contains
   stale names; Subsoil reports them as `unresolved`.
+- **Large brute-force runs can stress a small router.** Connection reuse keeps
+  NAT flow counts low, but very high `--qps`/`--workers` values can still
+  saturate a weak router or trigger resolver rate limits. Lower the rate or run
+  the scan from a remote host if browsing is affected.
 - **Wildcard heuristic.** A real host sharing every address with the wildcard
   record is treated as a false positive. The count is reported.
 - **HTTP body hashing is capped** at 2 MiB; `body_len` says how much was read.

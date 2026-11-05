@@ -3,7 +3,9 @@ package dnsx
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -212,4 +214,81 @@ func mustRR(t *testing.T, s string) dns.RR {
 		t.Fatal(err)
 	}
 	return rr
+}
+
+func TestResolverReusesUDPConnections(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{})
+	var mu sync.Mutex
+	seen := make(map[string]struct{})
+	handler := dns.HandlerFunc(func(w dns.ResponseWriter, req *dns.Msg) {
+		mu.Lock()
+		seen[w.RemoteAddr().String()] = struct{}{}
+		mu.Unlock()
+		resp := new(dns.Msg)
+		resp.SetReply(req)
+		if rr, err := dns.NewRR(req.Question[0].Name + " 60 IN A 192.0.2.1"); err == nil {
+			resp.Answer = []dns.RR{rr}
+		}
+		_ = w.WriteMsg(resp)
+	})
+	srv := &dns.Server{PacketConn: pc, Handler: handler, NotifyStartedFunc: func() { close(started) }}
+	go func() { _ = srv.ActivateAndServe() }()
+	defer func() { _ = srv.Shutdown() }()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("DNS test server did not start")
+	}
+
+	r, err := New([]string{pc.LocalAddr().String()}, 2*time.Second, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 20; i++ {
+		if _, _, err := r.Lookup(context.Background(), "example.test", dns.TypeA); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mu.Lock()
+	sequential := len(seen)
+	mu.Unlock()
+	if sequential > 1 {
+		t.Fatalf("sequential lookups used %d source ports, want 1", sequential)
+	}
+
+	mu.Lock()
+	seen = make(map[string]struct{})
+	mu.Unlock()
+	var wg sync.WaitGroup
+	errCh := make(chan error, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				if _, _, err := r.Lookup(context.Background(), "example.test", dns.TypeA); err != nil {
+					errCh <- err
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	concurrent := len(seen)
+	mu.Unlock()
+	if concurrent > 12 {
+		t.Fatalf("concurrent lookups used %d source ports, want a bounded pool", concurrent)
+	}
+	if concurrent == 0 {
+		t.Fatal("no DNS requests reached the test server")
+	}
 }
