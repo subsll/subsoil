@@ -13,6 +13,13 @@ All notable changes to Subsoil are documented here. The format follows
   in the evidence. Supports `--hash`, `--json`, directory or file case paths, and
   sidecar validation.
 
+### Fixed
+
+- DNS queries reuse a bounded pool of persistent UDP connections per resolver
+  instead of opening a fresh socket for every query. Sockets rotate after 512
+  queries to retain source-port diversity. This prevents large brute-force runs
+  from filling small-router NAT/conntrack tables and disrupting normal browsing.
+
 ## [1.3.3]
 
 ### Fixed
