@@ -4,6 +4,21 @@ All notable changes to Subsoil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.4.0]
+
+### Added
+
+- `subsoil compare <file> --case <case-dir|evidence.jsonl>` computes a file's
+  SHA-256, verifies the case chain and reports whether the digest already appears
+  in the evidence. Supports `--hash`, `--json`, directory or file case paths, and
+  sidecar validation.
+
+## [1.3.3]
+
+### Fixed
+
+- Published the canonical Go module path `github.com/subsll/subsoil`.
+
 ## [1.3.2]
 
 ### Added

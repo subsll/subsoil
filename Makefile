@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-VERSION ?= 1.3.2
+VERSION ?= 1.4.0
 GO      ?= go
 DIST    := dist
 LDFLAGS := -s -w -X github.com/subsll/subsoil/internal/model.Version=$(VERSION)

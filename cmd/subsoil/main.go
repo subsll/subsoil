@@ -39,6 +39,8 @@ func run(args []string) int {
 		return cmdScan(args[1:])
 	case "verify":
 		return cmdVerify(args[1:])
+	case "compare":
+		return cmdCompare(args[1:])
 	case "version", "--version", "-version", "-V":
 		fmt.Printf("subsoil %s (%s %s/%s)\n", model.Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 		return 0

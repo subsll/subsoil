@@ -62,6 +62,7 @@ func printWelcome(w io.Writer, color bool) {
 	}
 	row("scan <domain>", "run a reconnaissance scan")
 	row("verify <evidence>", "verify the SHA-256 chain")
+	row("compare <file>", "check a file against a case")
 	row("version", "print build and platform")
 	row("help", "show this screen")
 	fmt.Fprintf(w, "  %s\n", p.dim("╰"+rule+"╯"))
@@ -73,6 +74,7 @@ func printWelcome(w io.Writer, color bool) {
 		{"subsoil example.com --srv --http", "service records and web probes"},
 		{"subsoil example.com -e --axfr", "deeper and louder"},
 		{"subsoil example.com --verbose", "show every DNS query"},
+		{"subsoil compare f --case dir", "already captured or new?"},
 	}
 	for _, e := range examples {
 		fmt.Fprintf(w, "    %s %s\n", p.cyan(padRight(e[0], 34)), p.dim(e[1]))
@@ -100,6 +102,7 @@ func printWelcome(w io.Writer, color bool) {
 	fmt.Fprintf(w, "\n  %s\n", p.bold("EVIDENCE"))
 	fmt.Fprintf(w, "    Every finding is SHA-256 hashed into a tamper-evident chain.\n")
 	fmt.Fprintf(w, "    Verify a run:  %s\n", p.green("subsoil verify <scan-dir>/evidence.jsonl"))
+	fmt.Fprintf(w, "    Compare a file: %s\n", p.green("subsoil compare <file> --case <scan-dir>"))
 
 	fmt.Fprintf(w, "\n  %s\n", p.yellow("Use only against systems you own or are explicitly authorised to test."))
 	fmt.Fprintf(w, "  %s\n\n", p.dim("tip: start with --passive; it sends no DNS packets at all."))
