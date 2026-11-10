@@ -26,7 +26,7 @@ fixed:
 | --- | --- |
 | `seq` | 1-based record number, contiguous |
 | `time` | observation time, UTC, RFC 3339 with nanoseconds |
-| `type` | `scan_start`, `dns_record`, `subdomain`, `host_resolved`, `host`, `wildcard`, `axfr`, `srv`, `ptr`, `http`, `source_error`, `scan_end` |
+| `type` | `scan_start`, `dns_record`, `subdomain`, `host_resolved`, `host`, `email_analysis`, `wildcard`, `axfr`, `srv`, `ptr`, `http`, `source_error`, `scan_end` |
 | `target` | the name, address or URL the observation is about |
 | `source` | `dns`, `dns:tcp`, `http`, `brute`, `passive:<provider>`, `subsoil` |
 | `prev_hash` | hash of the previous record; omitted for `seq` 1 |
@@ -37,11 +37,12 @@ fixed:
 
 | Type | Data |
 | --- | --- |
-| `scan_start` | version, resolvers, sources, passive_only, brute, started |
+| `scan_start` | version, resolvers, sources, passive_only, brute, resolve_ips, email_analysis, dkim_selectors, started |
 | `dns_record` | qtype, rcode, rrs (canonical strings), rrs_sha256 |
 | `subdomain` | source, and ips/aaaa/cname for brute-force hits, or `ips_hidden` |
 | `host_resolved` | ips, aaaa, cname, rcode, error |
 | `host` | ips, aaaa, cname, sources, resolved, rcode, ips_hidden |
+| `email_analysis` | score, grade, verdict, SPF/DKIM/DMARC components, issues |
 | `wildcard` | enabled, probes, ips, cnames |
 | `axfr` | ok, address, records, records_sha256, error |
 | `srv` | target, port, priority, weight |

@@ -70,6 +70,13 @@ func Write(res *model.Result, dir string, formats []string) ([]string, error) {
 	}
 	add("hosts.csv")
 
+	if res.EmailAnalysis != nil {
+		if err := writeEmailCSV(filepath.Join(dir, "email-analysis.csv"), res.EmailAnalysis); err != nil {
+			return nil, err
+		}
+		add("email-analysis.csv")
+	}
+
 	if res.Evidence.FileSHA256 != "" {
 		line := fmt.Sprintf("%s  evidence.jsonl\n", res.Evidence.FileSHA256)
 		if err := os.WriteFile(filepath.Join(dir, "evidence.jsonl.sha256"), []byte(line), 0o644); err != nil {
@@ -153,6 +160,43 @@ func checksums(dir string, files []string) (string, error) {
 	return b.String(), nil
 }
 
+func writeEmailCSV(path string, a *model.EmailAnalysis) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	w := csv.NewWriter(f)
+	header := []string{
+		"score", "max_score", "grade", "verdict",
+		"spf_present", "spf_valid", "spf_score", "spf_max", "spf_all", "spf_dns_lookups",
+		"dkim_configured", "dkim_valid", "dkim_score", "dkim_max", "dkim_valid_selectors",
+		"dmarc_present", "dmarc_valid", "dmarc_score", "dmarc_max", "dmarc_policy",
+		"dmarc_reporting", "dmarc_strict", "issues", "sha256",
+	}
+	if err := w.Write(header); err != nil {
+		return err
+	}
+	row := []string{
+		fmt.Sprintf("%d", a.Score), fmt.Sprintf("%d", a.MaxScore), a.Grade, a.Verdict,
+		fmt.Sprintf("%t", a.SPF.Present), fmt.Sprintf("%t", a.SPF.Valid),
+		fmt.Sprintf("%d", a.SPF.Score), fmt.Sprintf("%d", a.SPF.MaxScore),
+		a.SPF.All, fmt.Sprintf("%d", a.SPF.DNSLookups),
+		fmt.Sprintf("%t", a.DKIM.Configured), fmt.Sprintf("%t", a.DKIM.Valid),
+		fmt.Sprintf("%d", a.DKIM.Score), fmt.Sprintf("%d", a.DKIM.MaxScore),
+		strings.Join(a.DKIM.ValidSelectors, " "),
+		fmt.Sprintf("%t", a.DMARC.Present), fmt.Sprintf("%t", a.DMARC.Valid),
+		fmt.Sprintf("%d", a.DMARC.Score), fmt.Sprintf("%d", a.DMARC.MaxScore),
+		a.DMARC.Policy, fmt.Sprintf("%t", a.DMARC.Reporting), fmt.Sprintf("%t", a.DMARC.Strict),
+		strings.Join(a.Issues, " | "), a.SHA256,
+	}
+	if err := w.Write(row); err != nil {
+		return err
+	}
+	w.Flush()
+	return w.Error()
+}
+
 func writeHostsCSV(path string, hosts []model.Host) error {
 	f, err := os.Create(path)
 	if err != nil {
@@ -224,6 +268,10 @@ func RenderText(w io.Writer, res *model.Result, color bool) {
 		} else {
 			line("  %s", s.dim("(no records returned)"))
 		}
+	}
+
+	if res.EmailAnalysis != nil {
+		renderEmailText(w, s, res.EmailAnalysis)
 	}
 
 	// Subdomains.
@@ -595,7 +643,7 @@ func axfrOK(zs []model.AXFR) int {
 }
 
 func mdEscape(s string) string {
-	return strings.ReplaceAll(s, "|", "\\|")
+	return strings.ReplaceAll(cleanText(s), "|", "\\|")
 }
 
 func safeURL(s string) template.URL {
@@ -622,4 +670,52 @@ func renderHTML(w io.Writer, res *model.Result, graph bool) error {
 		return err
 	}
 	return t.Execute(w, htmlView{Result: res, Graph: graph})
+}
+
+func renderEmailText(w io.Writer, s styler, a *model.EmailAnalysis) {
+	line := func(format string, args ...any) { fmt.Fprintf(w, format+"\n", args...) }
+	line("")
+	section(w, s, "Email authentication")
+
+	scoreStyle := s.good
+	if a.Score < 75 {
+		scoreStyle = s.warn
+	}
+	line("  %-10s %s", s.dim("score"), scoreStyle(fmt.Sprintf("%d/%d", a.Score, a.MaxScore))+
+		s.dim(" · "+a.Grade+" · "+a.Verdict))
+	if a.Summary != "" {
+		line("  %-10s %s", s.dim("summary"), wrap(cleanText(a.Summary), 96, "             "))
+	}
+
+	spf := "missing"
+	if a.SPF.Present {
+		spf = "invalid record"
+		if a.SPF.Valid {
+			spf = fmt.Sprintf("%s · all=%s · %d DNS lookup(s)", truncate(cleanText(a.SPF.Record), 92), dash(a.SPF.All), a.SPF.DNSLookups)
+		}
+	}
+	dkim := fmt.Sprintf("not found (%d selector(s) checked)", len(a.DKIM.SelectorsChecked))
+	if a.DKIM.Valid {
+		dkim = "valid key at " + strings.Join(a.DKIM.ValidSelectors, ", ")
+	} else if a.DKIM.Configured {
+		dkim = fmt.Sprintf("configured but not verifiable · %d selector(s)", len(a.DKIM.FoundSelectors))
+	}
+	dmarc := "missing"
+	if a.DMARC.Present {
+		dmarc = "invalid record"
+		if a.DMARC.Valid {
+			dmarc = fmt.Sprintf("p=%s · rua=%t · strict alignment=%t · pct=%d", a.DMARC.Policy, a.DMARC.Reporting, a.DMARC.Strict, a.DMARC.Percent)
+		}
+	}
+	line("  %-10s %2d/%-2d  %s", s.dim("SPF"), a.SPF.Score, a.SPF.MaxScore, spf)
+	line("  %-10s %2d/%-2d  %s", s.dim("DKIM"), a.DKIM.Score, a.DKIM.MaxScore, dkim)
+	line("  %-10s %2d/%-2d  %s", s.dim("DMARC"), a.DMARC.Score, a.DMARC.MaxScore, dmarc)
+	for i, issue := range a.Issues {
+		if i >= 8 {
+			line("  %s", s.dim(fmt.Sprintf("… %d more email issue(s)", len(a.Issues)-8)))
+			break
+		}
+		line("  %s %s", s.warn("!"), cleanText(issue))
+	}
+	line("  %s", s.dim("DNS configuration hygiene only; not a deliverability score."))
 }

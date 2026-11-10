@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/subsll/subsoil/internal/dnsx"
+	"github.com/subsll/subsoil/internal/emailauth"
 	"github.com/subsll/subsoil/internal/evidence"
 	"github.com/subsll/subsoil/internal/logx"
 	"github.com/subsll/subsoil/internal/model"
@@ -73,6 +74,8 @@ func cmdScan(args []string) int {
 		ipv6          bool
 		resolveIPs    bool
 		noResolveIPs  bool
+		emailAnalysis bool
+		dkimSelectors string
 		capture       bool
 		workers       int
 		qps           int
@@ -110,6 +113,8 @@ func cmdScan(args []string) int {
 	fs.BoolVar(&ipv6, "ipv6", false, "resolve AAAA records")
 	fs.BoolVar(&resolveIPs, "resolve-ips", true, "resolve and display IP addresses for discovered subdomains")
 	fs.BoolVar(&noResolveIPs, "no-resolve-ips", false, "do not resolve or display IP addresses for discovered subdomains")
+	fs.BoolVar(&emailAnalysis, "email-analysis", false, "score SPF, DKIM and DMARC email authentication")
+	fs.StringVar(&dkimSelectors, "dkim-selectors", strings.Join(emailauth.DefaultSelectors, ","), "comma-separated DKIM selectors checked by --email-analysis")
 	fs.BoolVar(&capture, "capture", false, "save HTTP response bodies")
 	fs.IntVar(&workers, "workers", 20, "DNS workers")
 	fs.IntVar(&qps, "qps", 50, "DNS queries per second (0 = unlimited)")
@@ -197,6 +202,19 @@ func cmdScan(args []string) int {
 		ptr = false
 		recursive = false
 	}
+	if passiveOnly && emailAnalysis {
+		fmt.Fprintln(os.Stderr, "subsoil: --email-analysis requires DNS queries and cannot be used with --passive")
+		return 2
+	}
+
+	var dkimSelectorList []string
+	if emailAnalysis {
+		dkimSelectorList, err = emailauth.CleanSelectors([]string{dkimSelectors})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "subsoil: --dkim-selectors: %v\n", err)
+			return 2
+		}
+	}
 
 	var excl *regexp.Regexp
 	if exclude != "" {
@@ -270,8 +288,8 @@ func cmdScan(args []string) int {
 		fmt.Fprintf(os.Stderr, "  %s %s  %s %s  %s %d qps  %s %d workers\n",
 			p.dim("target"), domain, p.dim("·"), mode, p.dim("·"), qps, p.dim("·"), workers)
 	}
-	log.Verbose("config: target=%s resolvers=%s sources=%s workers=%d qps=%d timeout=%s resolve_ips=%t",
-		domain, strings.Join(resolverList, ","), strings.Join(sourceList, ","), workers, qps, timeout, resolveIPs)
+	log.Verbose("config: target=%s resolvers=%s sources=%s workers=%d qps=%d timeout=%s resolve_ips=%t email_analysis=%t",
+		domain, strings.Join(resolverList, ","), strings.Join(sourceList, ","), workers, qps, timeout, resolveIPs, emailAnalysis)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -305,6 +323,8 @@ func cmdScan(args []string) int {
 		Recursive:     recursive,
 		IPv6:          ipv6,
 		NoIPLookup:    !resolveIPs,
+		EmailAnalysis: emailAnalysis,
+		DKIMSelectors: dkimSelectorList,
 		Capture:       capture,
 		Workers:       workers,
 		QPS:           qps,

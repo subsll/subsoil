@@ -30,6 +30,8 @@ type ScanOptions struct {
 	Sources       []string `json:"sources,omitempty"`
 	MaxHosts      int      `json:"max_hosts"`
 	Capture       bool     `json:"capture"`
+	EmailAnalysis bool     `json:"email_analysis"`
+	DKIMSelectors []string `json:"dkim_selectors,omitempty"`
 }
 
 // RecordSet is one DNS query result, with a hash over the canonical RRset.
@@ -39,6 +41,75 @@ type RecordSet struct {
 	RCode  string   `json:"rcode"`
 	RRs    []string `json:"rrs,omitempty"`
 	SHA256 string   `json:"sha256,omitempty"`
+}
+
+// EmailAnalysis is the opt-in SPF/DKIM/DMARC posture score. It measures DNS
+// configuration hygiene, not deliverability or whether a message is authentic.
+type EmailAnalysis struct {
+	Score    int        `json:"score"`
+	MaxScore int        `json:"max_score"`
+	Grade    string     `json:"grade"`
+	Verdict  string     `json:"verdict"`
+	Summary  string     `json:"summary,omitempty"`
+	SPF      EmailSPF   `json:"spf"`
+	DKIM     EmailDKIM  `json:"dkim"`
+	DMARC    EmailDMARC `json:"dmarc"`
+	Issues   []string   `json:"issues,omitempty"`
+	SHA256   string     `json:"sha256,omitempty"`
+}
+
+// EmailSPF summarises an SPF record and its policy.
+type EmailSPF struct {
+	Present    bool     `json:"present"`
+	Valid      bool     `json:"valid"`
+	Score      int      `json:"score"`
+	MaxScore   int      `json:"max_score"`
+	Record     string   `json:"record,omitempty"`
+	Records    int      `json:"records,omitempty"`
+	All        string   `json:"all,omitempty"`
+	DNSLookups int      `json:"dns_lookups"`
+	Issues     []string `json:"issues,omitempty"`
+}
+
+// EmailDKIM summarises the DKIM selectors that were checked.
+type EmailDKIM struct {
+	Configured       bool           `json:"configured"`
+	Valid            bool           `json:"valid"`
+	Score            int            `json:"score"`
+	MaxScore         int            `json:"max_score"`
+	SelectorsChecked []string       `json:"selectors_checked,omitempty"`
+	Selectors        []DKIMSelector `json:"selectors,omitempty"`
+	FoundSelectors   []string       `json:"found_selectors,omitempty"`
+	ValidSelectors   []string       `json:"valid_selectors,omitempty"`
+	Issues           []string       `json:"issues,omitempty"`
+}
+
+// DKIMSelector is one selector look-up.
+type DKIMSelector struct {
+	Selector string `json:"selector"`
+	Name     string `json:"name"`
+	Status   string `json:"status"`
+	Valid    bool   `json:"valid"`
+	KeyType  string `json:"key_type,omitempty"`
+	CNAME    string `json:"cname,omitempty"`
+	Record   string `json:"record,omitempty"`
+	Issue    string `json:"issue,omitempty"`
+}
+
+// EmailDMARC summarises the DMARC record and policy.
+type EmailDMARC struct {
+	Present         bool     `json:"present"`
+	Valid           bool     `json:"valid"`
+	Score           int      `json:"score"`
+	MaxScore        int      `json:"max_score"`
+	Record          string   `json:"record,omitempty"`
+	Records         int      `json:"records,omitempty"`
+	Policy          string   `json:"policy,omitempty"`
+	SubdomainPolicy string   `json:"subdomain_policy,omitempty"`
+	Percent         int      `json:"percent,omitempty"`
+	Reporting       bool     `json:"reporting"`
+	Strict          bool     `json:"strict"`
+	Issues          []string `json:"issues,omitempty"`
 }
 
 // Host is a discovered name. Hash is the SHA-256 of the evidence record that
@@ -148,22 +219,23 @@ type EvidenceInfo struct {
 
 // Result is the complete output of one scan.
 type Result struct {
-	Tool       string       `json:"tool"`
-	Version    string       `json:"version"`
-	Domain     string       `json:"domain"`
-	Started    time.Time    `json:"started"`
-	Finished   time.Time    `json:"finished"`
-	DurationMS int64        `json:"duration_ms"`
-	Resolvers  []string     `json:"resolvers"`
-	Options    ScanOptions  `json:"options"`
-	Records    []RecordSet  `json:"records,omitempty"`
-	Hosts      []Host       `json:"hosts,omitempty"`
-	SRV        []SRV        `json:"srv,omitempty"`
-	PTR        []PTR        `json:"ptr,omitempty"`
-	AXFR       []AXFR       `json:"axfr,omitempty"`
-	HTTP       []HTTP       `json:"http,omitempty"`
-	Wildcard   Wildcard     `json:"wildcard"`
-	Stats      Stats        `json:"stats"`
-	Errors     []string     `json:"errors,omitempty"`
-	Evidence   EvidenceInfo `json:"evidence"`
+	Tool          string         `json:"tool"`
+	Version       string         `json:"version"`
+	Domain        string         `json:"domain"`
+	Started       time.Time      `json:"started"`
+	Finished      time.Time      `json:"finished"`
+	DurationMS    int64          `json:"duration_ms"`
+	Resolvers     []string       `json:"resolvers"`
+	Options       ScanOptions    `json:"options"`
+	Records       []RecordSet    `json:"records,omitempty"`
+	Hosts         []Host         `json:"hosts,omitempty"`
+	SRV           []SRV          `json:"srv,omitempty"`
+	PTR           []PTR          `json:"ptr,omitempty"`
+	AXFR          []AXFR         `json:"axfr,omitempty"`
+	HTTP          []HTTP         `json:"http,omitempty"`
+	EmailAnalysis *EmailAnalysis `json:"email_analysis,omitempty"`
+	Wildcard      Wildcard       `json:"wildcard"`
+	Stats         Stats          `json:"stats"`
+	Errors        []string       `json:"errors,omitempty"`
+	Evidence      EvidenceInfo   `json:"evidence"`
 }

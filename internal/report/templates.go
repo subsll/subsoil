@@ -25,7 +25,8 @@ const mdTemplate = `# Subsoil reconnaissance report — {{.Domain}}
 | Wildcard DNS | {{if .Wildcard.Enabled}}detected ({{join .Wildcard.IPs ", "}}){{else}}not detected{{end}} |
 | Zone transfers | {{if .Options.AXFR}}{{len .AXFR}} attempted, {{axfrok .AXFR}} successful{{else}}disabled{{end}} |
 | Web services probed | {{.Stats.HTTPProbes}} |
-| Evidence records | {{.Evidence.Records}} |
+{{if .EmailAnalysis}}| Email authentication | {{.EmailAnalysis.Score}}/{{.EmailAnalysis.MaxScore}} ({{.EmailAnalysis.Grade}}) |
+{{end}}| Evidence records | {{.Evidence.Records}} |
 
 {{if .Options.Passive}}
 > Passive-only mode: no DNS packets were sent to any resolver, so the target
@@ -41,6 +42,29 @@ const mdTemplate = `# Subsoil reconnaissance report — {{.Domain}}
 {{end}}{{end}}
 {{else}}
 No DNS records were collected.
+{{end}}
+
+{{if .EmailAnalysis}}
+## Email authentication
+
+**Score: {{.EmailAnalysis.Score}}/{{.EmailAnalysis.MaxScore}} ({{.EmailAnalysis.Grade}}, {{.EmailAnalysis.Verdict}}).** {{md .EmailAnalysis.Summary}}
+
+| Component | Score | Details |
+| --- | --- | --- |
+| SPF | {{.EmailAnalysis.SPF.Score}}/{{.EmailAnalysis.SPF.MaxScore}} | {{if .EmailAnalysis.SPF.Present}}{{if .EmailAnalysis.SPF.Valid}}valid; all={{dash .EmailAnalysis.SPF.All}}; {{.EmailAnalysis.SPF.DNSLookups}} DNS lookup term(s){{else}}invalid record{{end}}{{else}}missing{{end}} |
+| DKIM | {{.EmailAnalysis.DKIM.Score}}/{{.EmailAnalysis.DKIM.MaxScore}} | {{if .EmailAnalysis.DKIM.Valid}}valid key at {{join .EmailAnalysis.DKIM.ValidSelectors ", "}}{{else if .EmailAnalysis.DKIM.Configured}}configured but unverified{{else}}not found at {{len .EmailAnalysis.DKIM.SelectorsChecked}} checked selector(s){{end}} |
+| DMARC | {{.EmailAnalysis.DMARC.Score}}/{{.EmailAnalysis.DMARC.MaxScore}} | {{if .EmailAnalysis.DMARC.Present}}{{if .EmailAnalysis.DMARC.Valid}}p={{.EmailAnalysis.DMARC.Policy}}; rua={{.EmailAnalysis.DMARC.Reporting}}; strict={{.EmailAnalysis.DMARC.Strict}}; pct={{.EmailAnalysis.DMARC.Percent}}{{else}}invalid record{{end}}{{else}}missing{{end}} |
+
+{{if .EmailAnalysis.SPF.Record}}SPF record: {{md .EmailAnalysis.SPF.Record}}
+
+{{end}}{{if .EmailAnalysis.DMARC.Record}}DMARC record: {{md .EmailAnalysis.DMARC.Record}}
+
+{{end}}{{if .EmailAnalysis.Issues}}**Issues**
+
+{{range .EmailAnalysis.Issues}}- {{md .}}
+{{end}}{{end}}
+> This score measures SPF/DKIM/DMARC DNS configuration hygiene only. It is not
+> a deliverability score and does not prove that every message is authentic.
 {{end}}
 
 ## Subdomains ({{len .Hosts}})
@@ -187,6 +211,7 @@ const htmlTemplate = `<!doctype html>
     <div class="card"><div class="k">Evidence records</div><div class="v">{{.Evidence.Records}}</div></div>
     <div class="card"><div class="k">DNS queries</div><div class="v">{{.Stats.DNSQueries}}</div></div>
     <div class="card"><div class="k">Duration</div><div class="v">{{dur .DurationMS}}</div></div>
+    {{if .EmailAnalysis}}<div class="card"><div class="k">Email score</div><div class="v">{{.EmailAnalysis.Score}}/{{.EmailAnalysis.MaxScore}}</div><div class="muted">{{.EmailAnalysis.Grade}} · {{.EmailAnalysis.Verdict}}</div></div>{{end}}
   </div>
 
   <p class="muted">
@@ -205,6 +230,24 @@ const htmlTemplate = `<!doctype html>
     </tbody>
   </table></div>
   {{else}}<p class="muted">No DNS records were collected.</p>{{end}}
+
+  {{if .EmailAnalysis}}
+  <h2>Email authentication</h2>
+  <p><span class="{{if ge .EmailAnalysis.Score 75}}ok{{else}}bad{{end}}"><strong>{{.EmailAnalysis.Score}}/{{.EmailAnalysis.MaxScore}} ({{.EmailAnalysis.Grade}})</strong></span>
+  · {{.EmailAnalysis.Verdict}} — {{.EmailAnalysis.Summary}}</p>
+  <div class="wrap"><table>
+    <thead><tr><th>Component</th><th>Score</th><th>Details</th></tr></thead>
+    <tbody>
+      <tr><td>SPF</td><td>{{.EmailAnalysis.SPF.Score}}/{{.EmailAnalysis.SPF.MaxScore}}</td><td>{{if .EmailAnalysis.SPF.Present}}{{if .EmailAnalysis.SPF.Valid}}valid · all={{dash .EmailAnalysis.SPF.All}} · {{.EmailAnalysis.SPF.DNSLookups}} DNS lookup term(s){{else}}invalid record{{end}}{{else}}missing{{end}}</td></tr>
+      <tr><td>DKIM</td><td>{{.EmailAnalysis.DKIM.Score}}/{{.EmailAnalysis.DKIM.MaxScore}}</td><td>{{if .EmailAnalysis.DKIM.Valid}}valid key at {{join .EmailAnalysis.DKIM.ValidSelectors ", "}}{{else if .EmailAnalysis.DKIM.Configured}}configured but unverified{{else}}not found at checked selectors{{end}}</td></tr>
+      <tr><td>DMARC</td><td>{{.EmailAnalysis.DMARC.Score}}/{{.EmailAnalysis.DMARC.MaxScore}}</td><td>{{if .EmailAnalysis.DMARC.Present}}{{if .EmailAnalysis.DMARC.Valid}}p={{.EmailAnalysis.DMARC.Policy}} · rua={{.EmailAnalysis.DMARC.Reporting}} · strict={{.EmailAnalysis.DMARC.Strict}} · pct={{.EmailAnalysis.DMARC.Percent}}{{else}}invalid record{{end}}{{else}}missing{{end}}</td></tr>
+    </tbody>
+  </table></div>
+  {{if .EmailAnalysis.SPF.Record}}<p class="muted">SPF: <code>{{.EmailAnalysis.SPF.Record}}</code></p>{{end}}
+  {{if .EmailAnalysis.DMARC.Record}}<p class="muted">DMARC: <code>{{.EmailAnalysis.DMARC.Record}}</code></p>{{end}}
+  {{if .EmailAnalysis.Issues}}<ul>{{range .EmailAnalysis.Issues}}<li>{{.}}</li>{{end}}</ul>{{end}}
+  <p class="muted">This score measures SPF/DKIM/DMARC DNS configuration hygiene only. It is not a deliverability score and does not prove that every message is authentic.</p>
+  {{end}}
 
   <h2>Subdomains</h2>
   {{if not .Options.ResolveIPs}}<p class="muted">IP lookup is disabled for this scan; addresses are hidden.</p>{{end}}

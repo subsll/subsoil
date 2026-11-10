@@ -3,6 +3,7 @@ package scan
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net"
 	"os"
@@ -350,4 +351,144 @@ func keys(m map[string]model.Host) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func TestScanEmailAnalysis(t *testing.T) {
+	z := testutil.NewZone("example.test")
+	dkimKey := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("dkim-test-key-", 5)))
+	z.Add(
+		"example.test. 300 IN SOA ns1.example.test. hostmaster.example.test. 1 3600 600 86400 300",
+		"example.test. 300 IN NS ns1.example.test.",
+		"example.test. 300 IN A 192.0.2.1",
+		"example.test. 300 IN TXT \"v=spf1 include:_spf.example.test -all\"",
+		"_dmarc.example.test. 300 IN TXT \"v=DMARC1; p=reject; rua=mailto:dmarc@example.test; adkim=s; aspf=s\"",
+		"default._domainkey.example.test. 300 IN TXT \"v=DKIM1; k=rsa; p="+dkimKey+"\"",
+		"ns1.example.test. 300 IN A 127.0.0.1",
+	)
+	addr := z.Start(t)
+	dir := t.TempDir()
+
+	res, err := Run(context.Background(), Options{
+		Domain:        "example.test",
+		OutDir:        dir,
+		EmailAnalysis: true,
+		DKIMSelectors: []string{"default", "missing"},
+		Workers:       2,
+		QPS:           0,
+		Timeout:       2 * time.Second,
+		Resolvers:     []string{addr},
+		MaxHosts:      20,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.EmailAnalysis == nil {
+		t.Fatal("email analysis missing")
+	}
+	ea := res.EmailAnalysis
+	if ea.Score != 100 || ea.Grade != "A" {
+		t.Fatalf("email score = %d/%s, want 100/A (%+v)", ea.Score, ea.Grade, ea)
+	}
+	if !ea.SPF.Valid || !ea.DKIM.Valid || !ea.DMARC.Valid {
+		t.Fatalf("email components = %+v", ea)
+	}
+	if len(ea.DKIM.ValidSelectors) != 1 || ea.DKIM.ValidSelectors[0] != "default" {
+		t.Fatalf("valid selectors = %v", ea.DKIM.ValidSelectors)
+	}
+	if ea.SHA256 == "" {
+		t.Fatal("email analysis evidence hash is empty")
+	}
+	if !res.Options.EmailAnalysis || strings.Join(res.Options.DKIMSelectors, ",") != "default,missing" {
+		t.Fatalf("scan options = %+v", res.Options)
+	}
+
+	foundDKIM := false
+	for _, rs := range res.Records {
+		if rs.Name == "default._domainkey.example.test" && rs.Type == "TXT" && len(rs.RRs) == 1 {
+			foundDKIM = true
+		}
+	}
+	if !foundDKIM {
+		t.Fatal("DKIM selector record missing from result records")
+	}
+
+	rep, err := evidence.VerifyFile(res.Evidence.File)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rep.OK {
+		t.Fatalf("evidence verification failed: %v", rep.Errors)
+	}
+	raw, err := os.ReadFile(res.Evidence.File)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "email_analysis") || !strings.Contains(string(raw), ea.SHA256) {
+		t.Fatal("email analysis evidence record missing")
+	}
+
+	files, err := report.Write(res, dir, []string{"text", "json", "md", "html", "graph"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(files, "email-analysis.csv") || !containsString(files, "graph.html") {
+		t.Fatalf("email or graph output missing from %v", files)
+	}
+	sums, err := os.ReadFile(filepath.Join(dir, "SHA256SUMS"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(sums), "email-analysis.csv") {
+		t.Fatalf("email-analysis.csv missing from SHA256SUMS: %s", sums)
+	}
+	text, err := os.ReadFile(filepath.Join(dir, "report.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(text), "Email authentication") || !strings.Contains(string(text), "100/100") {
+		t.Fatal("terminal report is missing email analysis")
+	}
+	md, err := os.ReadFile(filepath.Join(dir, "report.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(md), "## Email authentication") || !strings.Contains(string(md), "100/100") {
+		t.Fatal("markdown report is missing email analysis")
+	}
+	page, err := os.ReadFile(filepath.Join(dir, "report.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), "Email authentication") || !strings.Contains(string(page), "100/100") {
+		t.Fatal("HTML report is missing email analysis")
+	}
+	csvData, err := os.ReadFile(filepath.Join(dir, "email-analysis.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(csvData), "score,max_score,grade") || !strings.Contains(string(csvData), "100,100,A") {
+		t.Fatalf("unexpected email CSV: %s", csvData)
+	}
+}
+
+func TestEmailAnalysisRejectsPassive(t *testing.T) {
+	_, err := Run(context.Background(), Options{
+		Domain:        "example.test",
+		OutDir:        t.TempDir(),
+		PassiveOnly:   true,
+		EmailAnalysis: true,
+		Sources:       []string{"none"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "cannot be combined") {
+		t.Fatalf("error = %v, want passive-mode conflict", err)
+	}
+}
+
+func containsString(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
 }

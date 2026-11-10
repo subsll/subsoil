@@ -15,7 +15,7 @@ hash-chained evidence log so results can be verified later.
 
 ```text
 $ subsoil scan example.com --no-brute --verbose
-  Subsoil 1.4.0  ·  low-observable DNS reconnaissance
+  Subsoil 1.5.0  ·  low-observable DNS reconnaissance
   target example.com  ·  standard  ·  50 qps  ·  20 workers
 
 [v] config: target=example.com resolvers=1.1.1.1:53 sources=crt.sh,certspotter workers=20 qps=50 timeout=5s
@@ -35,6 +35,8 @@ $ subsoil scan example.com --no-brute --verbose
 - **Passive first** — certificate transparency and passive-DNS sources before any
   packet goes near the target.
 - **DNS baseline** — A, AAAA, NS, MX, TXT, SOA, CAA, SPF and DMARC.
+- **Email posture score** — opt-in SPF, DKIM and DMARC analysis with a
+  transparent 0–100 configuration score, grade and actionable issues.
 - **Wildcard-aware brute forcing** — detects wildcard DNS, fingerprints the answers
   and discards false positives.
 - **Optional active checks** — AXFR, SRV, PTR, one-level recursion and HTTP(S)
@@ -114,6 +116,9 @@ subsoil scan example.com
 # Add service and web checks.
 subsoil scan example.com --srv --ptr --http
 
+# Score email authentication records.
+subsoil scan example.com --email-analysis
+
 # Deeper and faster: 20k words, AXFR attempts, recursion, body capture.
 subsoil scan example.com -e --axfr --recursive --http --capture --fast
 
@@ -137,15 +142,18 @@ reference and quick-start recipes.
    servers.
 2. **DNS baseline** resolves the apex records and `_dmarc`, with a timeout and
    rate limit.
-3. **Wildcard detection** resolves random labels. If they answer, the fingerprint
+3. **Email analysis** (`--email-analysis`) scores SPF, DKIM and DMARC and checks
+   the configured DKIM selectors.
+4. **Wildcard detection** resolves random labels. If they answer, the fingerprint
    is recorded and matching brute-force results are filtered.
-4. **Brute force** resolves `word.domain` with a worker pool, paced by `--qps`.
-5. **Optional active checks** — AXFR, SRV, PTR, recursion, HTTP(S) — run only when
+5. **Brute force** resolves `word.domain` with a worker pool, paced by `--qps`.
+6. **Optional active checks** — AXFR, SRV, PTR, recursion, HTTP(S) — run only when
    requested.
-6. **Evidence** is appended for each observation, then the log is closed and its
+7. **Evidence** is appended for each observation, then the log is closed and its
    root hash is recorded in the reports.
 
-In `--passive` mode steps 2–5 are skipped entirely. You still get passive names,
+In `--passive` mode steps 2–6 are skipped entirely. `--email-analysis` cannot be
+combined with `--passive` because it requires DNS lookups. You still get passive names,
 marked resolved or unresolved where known, plus source errors in the evidence log.
 
 ---
@@ -310,6 +318,7 @@ subsoil-example.com-20260101-120000/
 ├── report.json              complete machine-readable result
 ├── subdomains.txt           one name per line
 ├── hosts.csv                name, status, addresses, hidden flag, sources, SHA-256
+├── email-analysis.csv       email score, components and issues (--email-analysis)
 ├── evidence.jsonl           hash-chained proof log
 ├── evidence.jsonl.sha256    detached file hash
 ├── bodies/                  HTTP bodies (only with --capture)
@@ -332,6 +341,8 @@ subsoil-example.com-20260101-120000/
     --http               probe HTTP(S)
     --srv                enumerate common SRV records
     --ptr                reverse-resolve discovered addresses
+    --email-analysis     score SPF, DKIM and DMARC configuration
+    --dkim-selectors <l> DKIM selectors to check (comma separated)
     --recursive          brute one level under discovered hosts
     --ipv6               also resolve AAAA
     --resolve-ips        resolve/display IPs for discovered names (default true)
@@ -358,6 +369,39 @@ subsoil-example.com-20260101-120000/
 Exit codes: `scan`/`verify` use `0` success, `1` error or broken evidence;
 `compare` uses `0` already captured, `1` new evidence. Usage or comparison
 errors use `2`. Interrupted scans use `130` and still write a partial report.
+
+---
+
+## Email authentication analysis
+
+`--email-analysis` adds an opt-in SPF, DKIM and DMARC posture score. It reuses
+the baseline SPF and DMARC TXT answers and performs selector-specific DKIM TXT
+lookups. It therefore requires DNS and cannot be combined with `--passive`.
+
+```sh
+subsoil scan example.com --email-analysis
+
+# Add a provider selector that is not in the default list
+subsoil scan example.com --email-analysis --dkim-selectors google,selector1,custom
+```
+
+The score is deliberately transparent and measures DNS configuration hygiene,
+not deliverability or whether individual messages are authentic:
+
+| Component | Max | What contributes |
+| --- | ---: | --- |
+| SPF | 35 | one valid record, `-all`/`~all` policy and no more than 10 DNS-lookup terms |
+| DKIM | 25 | a structurally valid public key at any checked selector; a provider CNAME without a usable key scores partially |
+| DMARC | 40 | valid policy (`reject` > `quarantine` > `none`), `rua=` reporting and strict alignment |
+
+Grades are `A` (90–100), `B` (75–89), `C` (60–74), `D` (40–59) and `F` (below
+40). The result appears in the terminal report, Markdown, HTML, JSON,
+`email-analysis.csv` and as a hash-chained `email_analysis` evidence record.
+
+DKIM selectors cannot be enumerated from DNS. Subsoil checks a conservative
+default list (`default`, `google`, `selector1`, `selector2`, `s1`, `s2`, `k1`,
+`mail`, `dkim`, `smtp`, `mandrill`, `zoho`, `protonmail`, `cm`). Use
+`--dkim-selectors` for provider-specific or custom selectors.
 
 ---
 

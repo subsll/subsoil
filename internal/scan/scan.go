@@ -18,6 +18,7 @@ import (
 
 	"github.com/subsll/subsoil/internal/brute"
 	"github.com/subsll/subsoil/internal/dnsx"
+	"github.com/subsll/subsoil/internal/emailauth"
 	"github.com/subsll/subsoil/internal/evidence"
 	"github.com/subsll/subsoil/internal/model"
 	"github.com/subsll/subsoil/internal/passive"
@@ -68,6 +69,8 @@ type Options struct {
 	MaxHosts      int
 	MaxHTTP       int
 	Exclude       *regexp.Regexp
+	EmailAnalysis bool
+	DKIMSelectors []string
 	Log           Logger
 	Stage         func(string)
 }
@@ -147,6 +150,16 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if opt.EmailAnalysis && opt.PassiveOnly {
+		return nil, fmt.Errorf("--email-analysis requires DNS queries and cannot be combined with --passive")
+	}
+	if opt.EmailAnalysis {
+		selectors, serr := emailauth.CleanSelectors(opt.DKIMSelectors)
+		if serr != nil {
+			return nil, fmt.Errorf("DKIM selectors: %w", serr)
+		}
+		opt.DKIMSelectors = selectors
+	}
 	if opt.PassiveOnly && len(opt.Sources) == 0 {
 		return nil, fmt.Errorf("passive mode needs at least one --sources entry")
 	}
@@ -183,6 +196,8 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 			Sources:       append([]string(nil), opt.Sources...),
 			MaxHosts:      opt.MaxHosts,
 			Capture:       opt.Capture,
+			EmailAnalysis: opt.EmailAnalysis && !opt.PassiveOnly,
+			DKIMSelectors: append([]string(nil), opt.DKIMSelectors...),
 		},
 	}
 	defer func() {
@@ -206,13 +221,15 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		opt.Log.Info("IP lookup disabled for discovered names; addresses will be hidden")
 	}
 	if _, aerr := rec.Add("scan_start", domain, "subsoil", map[string]any{
-		"version":      model.Version,
-		"resolvers":    opt.Resolvers,
-		"passive_only": opt.PassiveOnly,
-		"brute":        opt.Brute && !opt.PassiveOnly,
-		"resolve_ips":  !opt.NoIPLookup,
-		"sources":      opt.Sources,
-		"started":      started.Format(time.RFC3339Nano),
+		"version":        model.Version,
+		"resolvers":      opt.Resolvers,
+		"passive_only":   opt.PassiveOnly,
+		"brute":          opt.Brute && !opt.PassiveOnly,
+		"resolve_ips":    !opt.NoIPLookup,
+		"sources":        opt.Sources,
+		"email_analysis": opt.EmailAnalysis && !opt.PassiveOnly,
+		"dkim_selectors": opt.DKIMSelectors,
+		"started":        started.Format(time.RFC3339Nano),
 	}); aerr != nil {
 		return res, aerr
 	}
@@ -361,6 +378,21 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 
 	if !opt.PassiveOnly {
 		opt.Log.Verbose("collected %d DNS record set(s)", len(res.Records))
+	}
+
+	if opt.EmailAnalysis && !opt.PassiveOnly && ctx.Err() == nil {
+		opt.stage("email analysis")
+		analysis := runEmailAnalysis(ctx, rr, domain, res, opt.DKIMSelectors, rec, record, opt.Log)
+		res.EmailAnalysis = analysis
+		if analysis != nil {
+			ev, aerr := rec.Add("email_analysis", domain, "dns", analysis)
+			if aerr != nil {
+				addErr("evidence write failed: %v", aerr)
+			} else {
+				analysis.SHA256 = ev.Hash
+			}
+			opt.Log.Info("email analysis: %s", emailScoreSummary(analysis))
+		}
 	}
 
 	// Wildcard fingerprint, needed before brute forcing.
@@ -770,6 +802,10 @@ func Run(ctx context.Context, opt Options) (res *model.Result, err error) {
 		"brute_tried": res.Stats.BruteTried, "brute_hits": res.Stats.BruteHits,
 		"hosts": len(res.Hosts), "http_probes": res.Stats.HTTPProbes,
 		"duration_ms": time.Since(started).Milliseconds(), "error_count": len(res.Errors),
+	}
+	if res.EmailAnalysis != nil {
+		stats["email_score"] = res.EmailAnalysis.Score
+		stats["email_grade"] = res.EmailAnalysis.Grade
 	}
 	if _, aerr := rec.Add("scan_end", domain, "subsoil", stats); aerr != nil {
 		addErr("evidence write failed: %v", aerr)

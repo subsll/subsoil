@@ -4,6 +4,19 @@ All notable changes to Subsoil are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [1.5.0]
+
+### Added
+
+- Opt-in `--email-analysis` SPF, DKIM and DMARC posture scoring (0–100 with an
+  A–F grade), available in terminal, Markdown, HTML, JSON, `email-analysis.csv`
+  and the hash-chained evidence log.
+- DKIM selector lookups with a conservative default selector list and
+  `--dkim-selectors` for provider-specific selectors.
+- Transparent SPF, DKIM and DMARC component scores and actionable configuration
+  issues, including SPF lookup limits, permissive `+all`, missing DMARC
+  reporting, relaxed alignment and revoked or unverifiable DKIM keys.
+
 ## [1.4.0]
 
 ### Added
